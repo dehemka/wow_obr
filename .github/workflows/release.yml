@@ -71,22 +71,22 @@ jobs:
             dist/release.json
 
       # Notification Discord : secret DISCORD_WEBHOOK (Settings → Secrets and variables → Actions).
-      # Sans secret, l'étape est simplement sautée.
+      # Sans secret, l'étape ne fait rien.
       - name: Notifier Discord
-        if: steps.check.outputs.skip != 'true' && env.HAS_WEBHOOK == 'true'
+        if: steps.check.outputs.skip != 'true'
         env:
-          HAS_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK != '' }}
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           VERSION: ${{ steps.check.outputs.version }}
           RELEASE_URL: ${{ steps.release.outputs.url }}
         run: |
           set -euo pipefail
+          if [[ -z "${DISCORD_WEBHOOK:-}" ]]; then
+            echo "Pas de secret DISCORD_WEBHOOK : notification ignorée."
+            exit 0
+          fi
           ZIP_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/OneButtonRotation-$VERSION-forever.zip"
-          jq -n --arg t "OneButtonRotation v$VERSION publiée" \
-                --arg u "$RELEASE_URL" \
-                --arg d "Nouvelle version disponible pour WoW Forever.
-WoWDeck / WowUp la proposeront au prochain contrôle des mises à jour.
-[Télécharger le zip]($ZIP_URL)" \
-                '{username:"OneButtonRotation", embeds:[{title:$t, url:$u, description:$d, color:9442302}]}' \
+          DESC="Nouvelle version disponible pour WoW Forever.\nWoWDeck / WowUp la proposeront au prochain contrôle des mises à jour.\n[Télécharger le zip]($ZIP_URL)"
+          jq -n --arg t "OneButtonRotation v$VERSION publiée" --arg u "$RELEASE_URL" --arg d "$DESC" \
+            '{username:"OneButtonRotation", embeds:[{title:$t, url:$u, description:($d | gsub("\\\\n"; "\n")), color:9442302}]}' \
             | curl -sS -f -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
           echo "Notification Discord envoyée."
