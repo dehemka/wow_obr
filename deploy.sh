@@ -7,8 +7,9 @@
 # Profil AWS : perso
 #
 # Usage : ./deploy.sh [--short [alias]] [--no-invalidate] [--dry-run] [--release]
-#   --release        après le déploiement : commit de tout (si besoin), tag v<version>, push main + tag
-#                    → GitHub Actions publie la Release (zip -forever + release.json) lue par WowUp
+#   --release        après le déploiement : commit de tout (si besoin) et push sur main
+#                    → GitHub Actions crée la Release v<version> (tag, zip -forever, release.json)
+#                    lue par WowUp / WoWDeck, si elle n'existe pas déjà
 #   --short [alias]  crée (une seule fois) un lien court is.gd vers le zip "latest",
 #                    avec un alias personnalisé optionnel (ex: --short obr-wow -> https://is.gd/obr-wow)
 #   --no-invalidate  ne purge pas le cache CloudFront
@@ -143,20 +144,19 @@ elif [[ $SHORT -eq 1 ]]; then
   echo "  [dry-run] curl is.gd/create.php url=$LATEST_URL${SHORT_ALIAS:+ shorturl=$SHORT_ALIAS}"
 fi
 
-# Release GitHub (optionnel) : commit, tag v<version>, push → workflow .github/workflows/release.yml
+# Release GitHub (optionnel) : commit + push, le workflow .github/workflows/release.yml fait le reste
 if [[ $RELEASE -eq 1 ]]; then
-  echo "🏷️  Release GitHub v$VERSION..."
-  if git -C "$SCRIPT_DIR" rev-parse "v$VERSION" >/dev/null 2>&1; then
-    echo "⚠️ Le tag v$VERSION existe déjà : monte '## Version:' dans le .toc avant de refaire une release." >&2
-  else
-    if [[ -n "$(git -C "$SCRIPT_DIR" status --porcelain)" ]]; then
-      run git -C "$SCRIPT_DIR" add -A
-      run git -C "$SCRIPT_DIR" commit -q -m "v$VERSION"
-    fi
-    run git -C "$SCRIPT_DIR" tag -a "v$VERSION" -m "OneButtonRotation v$VERSION"
-    run git -C "$SCRIPT_DIR" push origin HEAD "v$VERSION"
-    echo "✅ Tag v$VERSION poussé : https://github.com/dehemka/wow_obr/actions"
+  echo "🏷️  Publication GitHub v$VERSION..."
+  if git -C "$SCRIPT_DIR" ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+    echo "⚠️ La Release v$VERSION existe déjà sur GitHub : le push partira mais aucune nouvelle Release ne sera créée." >&2
+    echo "   Monte '## Version:' dans le .toc pour publier une nouvelle version." >&2
   fi
+  if [[ -n "$(git -C "$SCRIPT_DIR" status --porcelain)" ]]; then
+    run git -C "$SCRIPT_DIR" add -A
+    run git -C "$SCRIPT_DIR" commit -q -m "v$VERSION"
+  fi
+  run git -C "$SCRIPT_DIR" push origin HEAD
+  echo "✅ Poussé : la Release se crée ici → https://github.com/dehemka/wow_obr/actions"
 fi
 
 echo "----------------------------------------------------------"

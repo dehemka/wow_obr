@@ -1,15 +1,22 @@
-# Publie une Release GitHub à chaque tag vX.Y.Z (ou à la main via "Run workflow").
-# Le zip est nommé *-forever.zip et accompagné d'un release.json (format BigWigs),
-# ce que WowUp attend pour installer / mettre à jour l'addon depuis l'URL du repo.
+# Publie automatiquement une Release GitHub à chaque push sur main :
+# la version est lue dans le .toc (## Version:) ; si la Release v<version> n'existe pas
+# encore, elle est créée (tag inclus) avec un zip *-forever.zip et un release.json
+# (format BigWigs), ce que WowUp et WoWDeck lisent pour installer / mettre à jour l'addon.
+# Un push qui ne change pas la version ne fait rien.
 name: Release
 
 on:
   push:
+    branches: ["main"]
     tags: ["v*"]
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -17,30 +24,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Construire le zip et release.json
-        id: build
+      - name: Lire la version et vérifier si la Release existe
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           TOC=OneButtonRotation/OneButtonRotation.toc
           VERSION=$(sed -n 's/^## Version: *//p' "$TOC" | tr -d '\r[:space:]')
           IFACE=$(sed -n 's/^## Interface: *//p' "$TOC" | tr -d '\r[:space:]' | cut -d, -f1)
+          [[ -n "$VERSION" && -n "$IFACE" ]] || { echo "::error::Version ou Interface absente du .toc"; exit 1; }
           if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$VERSION" ]]; then
-            echo "::error::Le tag $GITHUB_REF_NAME ne correspond pas à la version $VERSION du .toc" >&2
-            exit 1
+            echo "::error::Le tag $GITHUB_REF_NAME ne correspond pas à la version $VERSION du .toc"; exit 1
           fi
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v$VERSION déjà publiée : rien à faire."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "iface=$IFACE" >> "$GITHUB_OUTPUT"
+
+      - name: Construire le zip et release.json
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.check.outputs.version }}"
           ./build.sh
           ZIP="OneButtonRotation-$VERSION-forever.zip"
           mv "dist/OneButtonRotation-$VERSION.zip" "dist/$ZIP"
           printf '{"releases":[{"filename":"%s","nolib":false,"metadata":[{"flavor":"forever","interface":%s}]}]}\n' \
-            "$ZIP" "$IFACE" > dist/release.json
+            "$ZIP" "${{ steps.check.outputs.iface }}" > dist/release.json
           cat dist/release.json
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Créer la Release
+        if: steps.check.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.build.outputs.version }}
-          name: OneButtonRotation v${{ steps.build.outputs.version }}
+          tag_name: v${{ steps.check.outputs.version }}
+          name: OneButtonRotation v${{ steps.check.outputs.version }}
           generate_release_notes: true
           files: |
             dist/OneButtonRotation-*-forever.zip

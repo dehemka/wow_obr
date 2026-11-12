@@ -12,11 +12,14 @@ leveling solo d'après le guide Method.
 
 ## Installation
 
-### Avec WowUp (mises à jour automatiques)
+### Avec WoWDeck ou WowUp (mises à jour automatiques)
 
-1. Dans WowUp, sélectionne ton client **Forever** (Options → WoW Clients → Re-Scan s'il manque).
-2. Mes addons → **Installer depuis une URL** → colle `https://github.com/dehemka/wow_obr`.
-3. WowUp installe la dernière Release et te proposera les suivantes.
+- **WoWDeck** (Steam Deck, plugin Decky) : My Addons → **Manual Install** → colle
+  `https://github.com/dehemka/wow_obr`.
+- **WowUp** : sélectionne ton client **Forever**, puis Mes addons → **Installer depuis une URL**
+  → colle la même adresse.
+
+Les deux installent la dernière Release GitHub et proposent les suivantes.
 
 ### À la main
 
@@ -35,9 +38,10 @@ Le mode d'emploi complet, les commandes et le dépannage sont dans
 
 - `tests/` : tests hors jeu (Lua 5.1, mock de l'API WoW), voir le README de l'addon.
 - `build.sh` construit `dist/OneButtonRotation-<version>.zip`.
-- `deploy.sh` publie le zip sur storage.dehemka.net ; `deploy.sh --release` commite, tague
-  `v<version>` et pousse : le workflow GitHub Actions crée alors la Release (zip `-forever`
-  + `release.json`) que WowUp consomme.
+- `deploy.sh` publie le zip sur storage.dehemka.net ; `deploy.sh --release` commite et pousse sur main :
+  le workflow GitHub Actions crée alors la Release `v<version>` (tag, zip `-forever`,
+  `release.json`) que WowUp et WoWDeck consomment. Tout push sur main qui change la version
+  du .toc publie une Release, sans rien d'autre à faire.
 - Le numéro de version se change dans `OneButtonRotation/OneButtonRotation.toc` (`## Version:`).
 
 Licence MIT.
