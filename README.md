@@ -41,7 +41,8 @@ Le mode d'emploi complet, les commandes et le dépannage sont dans
 - `deploy.sh` publie le zip sur storage.dehemka.net ; `deploy.sh --release` commite et pousse sur main :
   le workflow GitHub Actions crée alors la Release `v<version>` (tag, zip `-forever`,
   `release.json`) que WowUp et WoWDeck consomment. Tout push sur main qui change la version
-  du .toc publie une Release, sans rien d'autre à faire.
+  du .toc publie une Release, sans rien d'autre à faire. Si le secret `DISCORD_WEBHOOK` est
+  défini dans les paramètres du repo, un message Discord est envoyé à chaque Release.
 - Le numéro de version se change dans `OneButtonRotation/OneButtonRotation.toc` (`## Version:`).
 
 Licence MIT.
