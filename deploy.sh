@@ -6,7 +6,9 @@
 #         https://storage.dehemka.net/public/wow/obr.zip (alias court, même contenu)
 # Profil AWS : perso
 #
-# Usage : ./deploy.sh [--short [alias]] [--no-invalidate] [--dry-run]
+# Usage : ./deploy.sh [--short [alias]] [--no-invalidate] [--dry-run] [--release]
+#   --release        après le déploiement : commit de tout (si besoin), tag v<version>, push main + tag
+#                    → GitHub Actions publie la Release (zip -forever + release.json) lue par WowUp
 #   --short [alias]  crée (une seule fois) un lien court is.gd vers le zip "latest",
 #                    avec un alias personnalisé optionnel (ex: --short obr-wow -> https://is.gd/obr-wow)
 #   --no-invalidate  ne purge pas le cache CloudFront
@@ -27,13 +29,14 @@ AWS_PROFILE="perso"
 CLOUDFRONT_DIST_ID="E54331XHNFDHL"
 SHORT_URL_FILE="$SCRIPT_DIR/dist/short_url.txt"
 
-SHORT=0; SHORT_ALIAS=""; INVALIDATE=1; DRY=0
+SHORT=0; SHORT_ALIAS=""; INVALIDATE=1; DRY=0; RELEASE=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --short)         SHORT=1; if [[ -n "${2:-}" && "${2:0:2}" != "--" ]]; then SHORT_ALIAS="$2"; shift; fi ;;
     --no-invalidate) INVALIDATE=0 ;;
     --dry-run)       DRY=1 ;;
-    -h|--help)       sed -n '2,13p' "$0"; exit 0 ;;
+    --release)       RELEASE=1 ;;
+    -h|--help)       sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "Option inconnue : $1" >&2; exit 2 ;;
   esac
   shift
@@ -138,6 +141,22 @@ elif [[ $SHORT -eq 1 && $DRY -eq 0 ]]; then
   fi
 elif [[ $SHORT -eq 1 ]]; then
   echo "  [dry-run] curl is.gd/create.php url=$LATEST_URL${SHORT_ALIAS:+ shorturl=$SHORT_ALIAS}"
+fi
+
+# Release GitHub (optionnel) : commit, tag v<version>, push → workflow .github/workflows/release.yml
+if [[ $RELEASE -eq 1 ]]; then
+  echo "🏷️  Release GitHub v$VERSION..."
+  if git -C "$SCRIPT_DIR" rev-parse "v$VERSION" >/dev/null 2>&1; then
+    echo "⚠️ Le tag v$VERSION existe déjà : monte '## Version:' dans le .toc avant de refaire une release." >&2
+  else
+    if [[ -n "$(git -C "$SCRIPT_DIR" status --porcelain)" ]]; then
+      run git -C "$SCRIPT_DIR" add -A
+      run git -C "$SCRIPT_DIR" commit -q -m "v$VERSION"
+    fi
+    run git -C "$SCRIPT_DIR" tag -a "v$VERSION" -m "OneButtonRotation v$VERSION"
+    run git -C "$SCRIPT_DIR" push origin HEAD "v$VERSION"
+    echo "✅ Tag v$VERSION poussé : https://github.com/dehemka/wow_obr/actions"
+  fi
 fi
 
 echo "----------------------------------------------------------"

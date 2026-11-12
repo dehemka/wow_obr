@@ -1,0 +1,47 @@
+# Publie une Release GitHub à chaque tag vX.Y.Z (ou à la main via "Run workflow").
+# Le zip est nommé *-forever.zip et accompagné d'un release.json (format BigWigs),
+# ce que WowUp attend pour installer / mettre à jour l'addon depuis l'URL du repo.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construire le zip et release.json
+        id: build
+        run: |
+          set -euo pipefail
+          TOC=OneButtonRotation/OneButtonRotation.toc
+          VERSION=$(sed -n 's/^## Version: *//p' "$TOC" | tr -d '\r[:space:]')
+          IFACE=$(sed -n 's/^## Interface: *//p' "$TOC" | tr -d '\r[:space:]' | cut -d, -f1)
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$VERSION" ]]; then
+            echo "::error::Le tag $GITHUB_REF_NAME ne correspond pas à la version $VERSION du .toc" >&2
+            exit 1
+          fi
+          ./build.sh
+          ZIP="OneButtonRotation-$VERSION-forever.zip"
+          mv "dist/OneButtonRotation-$VERSION.zip" "dist/$ZIP"
+          printf '{"releases":[{"filename":"%s","nolib":false,"metadata":[{"flavor":"forever","interface":%s}]}]}\n' \
+            "$ZIP" "$IFACE" > dist/release.json
+          cat dist/release.json
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Créer la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.build.outputs.version }}
+          name: OneButtonRotation v${{ steps.build.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/OneButtonRotation-*-forever.zip
+            dist/release.json

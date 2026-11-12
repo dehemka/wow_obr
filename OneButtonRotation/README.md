@@ -221,7 +221,12 @@ d'entrées, la première utilisable gagne).
 ```
 ./build.sh        # produit dist/OneButtonRotation-<version>.zip
 ./deploy.sh       # build + upload S3 + purge CloudFront
+./deploy.sh --release   # idem + commit, tag v<version>, push → Release GitHub pour WowUp
 ```
+
+Code source et Releases : https://github.com/dehemka/wow_obr. Dans **WowUp**, « Installer depuis une
+URL » avec cette adresse donne les mises à jour automatiques (le workflow GitHub publie un zip
+`-forever` et un `release.json` à chaque tag).
 
 La version est lue dans `OneButtonRotation.toc` (`## Version:`). Le déploiement publie :
 
