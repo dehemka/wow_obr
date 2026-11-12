@@ -1,0 +1,8 @@
+# Archives construites par build.sh / deploy.sh
+dist/
+# Guides PDF (droits d'auteur, usage perso)
+*.pdf
+# Divers
+*.swp
+*~
+.DS_Store

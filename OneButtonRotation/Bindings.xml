@@ -1,0 +1,8 @@
+<Bindings>
+  <Binding name="OBR_SOCIAL_WHEEL" category="ADDONS" header="ONEBUTTONROTATION">
+    if OneButtonRotation_ToggleSocial then OneButtonRotation_ToggleSocial() end
+  </Binding>
+  <Binding name="OBR_TOGGLE_UI" category="ADDONS">
+    if OneButtonRotation_ToggleUI then OneButtonRotation_ToggleUI() end
+  </Binding>
+</Bindings>
