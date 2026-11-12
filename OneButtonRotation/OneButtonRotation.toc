@@ -2,7 +2,7 @@
 ## Title: One Button Rotation
 ## Notes: Génère et met à jour la macro « one button rotation » adaptée à ta classe, ta spé et ton niveau. /obr
 ## Author: Eric
-## Version: 0.4.1
+## Version: 0.4.2
 ## SavedVariables: OneButtonRotationDB
 ## IconTexture: 136118
 ## X-Website: https://github.com/
