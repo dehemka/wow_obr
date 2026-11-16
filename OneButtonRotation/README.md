@@ -21,7 +21,7 @@ rotations de leveling solo basées sur le guide Method « WoW Forever Warlock Le
    « One Button Rotation » est coché. Si le jeu l'affiche « obsolète », coche
    **Charger les AddOns obsolètes** (le numéro d'interface du client bouge souvent).
 4. En jeu : `/obr` ouvre la fenêtre. Un menu à gauche donne accès aux pages **Rotation** (spé,
-   aperçu des macros), **Talents** (ordre des points et où tu en es), **Anneau social**, **Options**
+   aperçu des macros), **Talents** (ordre des points et où tu en es), **Anneau social**, **RestedXP**, **Options**
    et **Aide**. Le bouton « À quoi servent-elles ? » (ou `/obr aide`) ouvre l'explication des macros
    dans une fenêtre à part, en grand (A+ / A- pour la taille).
 
@@ -93,6 +93,21 @@ en es. Au level up, le chat rappelle le talent à prendre. `/obr talents chat` d
 chat. Les talents sont lus via `C_SpecializationInfo.GetTalentInfo` ; sans cette API l'état est
 approximatif. L'ordre est dans `data/WarlockTalents.lua` (Method ne détaille que le build Affliction).
 
+### Guide RestedXP embarqué
+
+Onglet **RestedXP** (ou `/obr rxp`). L'export de ton guide RestedXP (le fichier `.txt` téléchargé
+sur leur site) est embarqué dans l'addon : au chargement, RestedXP lit la variable `RXPString`
+et importe le guide tout seul la première fois (sa fenêtre d'import s'ouvre, puis les guides
+apparaissent dans son menu). Rien à copier sur le Steam Deck.
+
+L'onglet montre l'état (guide embarqué, RestedXP chargé, guide importé ou non), un bouton
+« Importer maintenant » si l'import automatique n'a pas eu lieu, et en secours un bouton qui met
+tout le texte dans une zone déjà sélectionnée pour un Ctrl+C / Ctrl+V dans RestedXP > Import.
+
+Le fichier n'est pas dans le dépôt GitHub (export personnel, lié à ton compte) : il est injecté au
+build depuis `private/restedxp_guide.txt`, ou en CI depuis l'URL secrète `RXP_GUIDE_URL`. Pour
+changer de guide : remplace `private/restedxp_guide.txt`, puis `./deploy.sh --release`.
+
 ### Phases démoniste
 
 | Phase | Affliction | Démonologie | Destruction |
@@ -131,6 +146,7 @@ Feu de l'âme gratuit (proc Decimation), Peur, Drain d'âme.
 | `/obr rangs`          | rang le plus élevé connu pour chaque sort de la macro        |
 | `/obr talents`        | liste des points de talents par niveau (guide Method) et où tu en es ; `chat` = résumé dans le chat |
 | `/obr aide`           | explication des macros dans une fenêtre à part, en grand                 |
+| `/obr rxp [chat]`     | onglet RestedXP (guide embarqué : état, import, copie du texte)           |
 | `/obr pad [page]`     | liste la barre manette de Forever et son contenu                         |
 | `/obr pad <obr\|vie\|social> <page> <barre> <bouton>` | pose la macro sur ce bouton de la barre manette |
 

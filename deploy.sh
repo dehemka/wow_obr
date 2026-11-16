@@ -97,6 +97,24 @@ else
 fi
 echo "✅ Uploadé : $ZIP_NAME, $LATEST_NAME, $(basename "$SHORT_KEY"), version.txt"
 
+# 2b. Guide RestedXP privé : copie à une URL non devinable (hors dépôt), lue par GitHub Actions
+#     via le secret RXP_GUIDE_URL. L'URL est mémorisée dans private/rxp_url.txt (ignoré par git).
+RXP_SRC="$SCRIPT_DIR/private/restedxp_guide.txt"
+RXP_URL_FILE="$SCRIPT_DIR/private/rxp_url.txt"
+if [[ -s "$RXP_SRC" ]]; then
+  if [[ ! -s "$RXP_URL_FILE" ]]; then
+    RAND=$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    echo "https://storage.dehemka.net/public/wow/p/$RAND/restedxp_guide.txt" > "$RXP_URL_FILE"
+    echo "🔑 URL privée du guide RestedXP créée : $(<"$RXP_URL_FILE")"
+    echo "   → à mettre dans le secret GitHub RXP_GUIDE_URL (Settings → Secrets and variables → Actions)."
+  fi
+  RXP_URL=$(<"$RXP_URL_FILE")
+  RXP_KEY=${RXP_URL#https://storage.dehemka.net/}
+  run aws s3 cp "$RXP_SRC" "$S3_BUCKET/$RXP_KEY" --profile "$AWS_PROFILE" \
+    --content-type "text/plain; charset=utf-8" --cache-control "private, no-store"
+  echo "✅ Guide RestedXP privé en ligne ($(du -h "$RXP_SRC" | cut -f1))."
+fi
+
 # 3. Invalidation CloudFront
 if [[ $INVALIDATE -eq 1 ]]; then
   echo "🔄 3/4 Invalidation CloudFront ($CLOUDFRONT_DIST_ID) sur /$S3_PREFIX/* et /$SHORT_KEY..."

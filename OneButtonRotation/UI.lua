@@ -9,6 +9,7 @@ local MENU = {
   { key = "rotation", label = "Rotation" },
   { key = "talents",  label = "Talents" },
   { key = "social",   label = "Anneau social" },
+  { key = "restedxp", label = "RestedXP" },
   { key = "options",  label = "Options" },
   { key = "help",     label = "Aide" },
 }
@@ -231,6 +232,124 @@ local function BuildSocialPage()
   }, "\n"))
 end
 
+-- Page RestedXP : guide embarqué, import automatique / manuel, copie du texte
+local function BuildRestedXPPage()
+  local p = NewPage("restedxp")
+  local status = Label(p, "", "GameFontHighlight")
+  status:SetPoint("TOPLEFT", 4, -4)
+  status:SetPoint("RIGHT", -4, 0)
+  status:SetJustifyH("LEFT")
+  status:SetSpacing(2)
+  status:SetHeight(96)
+  p.status = status
+
+  local import = Button(p, "Importer dans RestedXP maintenant", 260, 24, function()
+    local ok, msg = ns.ImportRestedXP()
+    Print("%s", msg)
+    ns.RefreshUI()
+  end)
+  import:SetPoint("TOPLEFT", 4, -104)
+  Tooltip(import, "Normalement inutile : RestedXP importe le guide tout seul à la connexion. "
+    .. "Ce bouton relance l'import si ce n'est pas fait.")
+  p.importButton = import
+
+  local open = Button(p, "Ouvrir la fenêtre d'import RestedXP", 260, 24, function()
+    if not ns.OpenRestedXPImporter() then Print("RestedXP n'est pas chargé.") end
+  end)
+  open:SetPoint("TOPLEFT", import, "BOTTOMLEFT", 0, -6)
+  p.openButton = open
+
+  local how = Label(p, table.concat({
+    "|cffffd100Comment ça marche|r",
+    "Le fichier d'export RestedXP est embarqué dans l'addon (data/RestedXP_Guide.lua, généré au build).",
+    "Au chargement, RestedXP lit la variable RXPString et importe le guide tout seul s'il ne l'a pas déjà :",
+    "sa fenêtre d'import s'ouvre, puis les guides apparaissent dans son menu. Rien à copier.",
+    "La chaîne est liée à ton compte Battle.net : elle ne sert à personne d'autre.",
+  }, "\n"), "GameFontHighlightSmall")
+  how:SetPoint("TOPLEFT", 4, -170)
+  how:SetPoint("RIGHT", -4, 0)
+  how:SetJustifyH("LEFT")
+  how:SetSpacing(2)
+  how:SetHeight(90)
+
+  local copyTitle = Label(p, "Copier-coller à la main (secours)")
+  copyTitle:SetPoint("TOPLEFT", 4, -268)
+  local show = Button(p, "Afficher le texte à copier", 200, 22, function()
+    local g = ns.RestedXPGuide
+    if not (g and g.text) then Print("Aucun guide embarqué.") return end
+    local box = p.copyBox
+    if box:IsShown() and box.filled then
+      box:SetText("") box.filled = nil box:Hide() p.copyHint:Hide()
+      p.showButton:SetText("Afficher le texte à copier")
+      return
+    end
+    box:Show()
+    box:SetText(g.text)          -- ~1,5 Mo : peut figer le jeu une ou deux secondes
+    box.filled = true
+    box:SetFocus()
+    box:HighlightText()
+    p.copyHint:Show()
+    p.showButton:SetText("Masquer le texte")
+  end)
+  show:SetPoint("TOPLEFT", 4, -292)
+  Tooltip(show, "Met toute la chaîne dans une zone de texte, déjà sélectionnée : Ctrl+C, puis colle-la dans "
+    .. "RestedXP > Import. Lourd (1,5 Mo) : l'import automatique est préférable.")
+  p.showButton = show
+
+  local box = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
+  box:SetPoint("TOPLEFT", 4, -322)
+  box:SetPoint("RIGHT", -8, 0)
+  box:SetHeight(24)
+  box:SetAutoFocus(false)
+  box:SetMaxLetters(0)
+  box:SetFontObject("ChatFontSmall")
+  box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  box:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+  box:SetScript("OnMouseUp", function(self) self:HighlightText() end)
+  box:SetScript("OnTextChanged", function(self, user)
+    -- lecture seule : si l'utilisateur tape, on remet le texte
+    if user and self.filled and ns.RestedXPGuide then self:SetText(ns.RestedXPGuide.text) self:HighlightText() end
+  end)
+  box:Hide()
+  p.copyBox = box
+
+  local hint = Label(p, "Tout est sélectionné : Ctrl+C (ou clavier Steam : touche Ctrl puis C). Dans RestedXP : "
+    .. "menu > Import Guides, colle avec Ctrl+V, puis « Import ».", "GameFontHighlightSmall")
+  hint:SetPoint("TOPLEFT", 4, -350)
+  hint:SetPoint("RIGHT", -4, 0)
+  hint:SetJustifyH("LEFT")
+  hint:SetHeight(40)
+  hint:Hide()
+  p.copyHint = hint
+end
+
+local function RefreshRestedXPPage(p)
+  local s = ns.RestedXPStatus()
+  local lines = {}
+  if s.hasGuide then
+    lines[#lines + 1] = ("|cffffd100Guide embarqué :|r %s"):format(s.name or "?")
+    lines[#lines + 1] = ("%s guides, %.0f Ko, généré le %s%s"):format(tostring(s.nGuides or "?"), (s.size or 0) / 1024,
+      s.generated or "?", s.base and (", pour RestedXP " .. s.base) or "")
+  else
+    lines[#lines + 1] = "|cffff6060Aucun guide embarqué dans cette version de l'addon.|r"
+  end
+  if s.rxpLoaded then
+    lines[#lines + 1] = ("|cffffd100RestedXP :|r chargé%s%s"):format(s.rxpVersion and (" (v" .. s.rxpVersion .. ")") or "",
+      s.compatible == false and "  |cffff6060guide trop récent, mets RestedXP à jour|r" or "")
+    if s.imported == true then
+      lines[#lines + 1] = "|cff60ff60Guide importé dans RestedXP.|r"
+    elseif s.imported == false then
+      lines[#lines + 1] = "|cffffd100Guide pas encore importé|r : RestedXP devrait le faire tout seul ; sinon, bouton ci-dessous."
+    end
+  else
+    lines[#lines + 1] = "|cffffd100RestedXP :|r non chargé (installe RXPGuides ou active-le à l'écran des personnages)."
+  end
+  p.status:SetText(table.concat(lines, "\n"))
+  p.importButton:SetEnabled(s.hasGuide and s.rxpLoaded and s.compatible ~= false)
+  p.openButton:SetEnabled(s.rxpLoaded)
+  p.showButton:SetEnabled(s.hasGuide)
+end
+
 local function BuildOptionsPage()
   local p = NewPage("options")
   p.checks = {
@@ -433,6 +552,7 @@ local function CreateUI()
   BuildRotationPage()
   BuildTalentsPage()
   BuildSocialPage()
+  BuildRestedXPPage()
   BuildOptionsPage()
   BuildHelpPage()
 
@@ -496,6 +616,7 @@ function ns.RefreshUI()
       if not box:HasFocus() then box:SetText(ns.db[box.dbKey] and tostring(ns.db[box.dbKey]) or "") end
     end
   end
+  if pages.restedxp and pages.restedxp:IsShown() then RefreshRestedXPPage(pages.restedxp) end
   ns.RefreshMacroHelp()
 end
 

@@ -18,7 +18,7 @@ C_Spell = {
   DoesSpellExist = function(id) return names[id] ~= nil end,
   RequestLoadSpellData = function(id) M.requested[id] = true end,
 }
-C_AddOns = { GetAddOnMetadata = function() return "test" end }
+C_AddOns = { GetAddOnMetadata = function() return "test" end, IsAddOnLoaded = function(n) return M.loadedAddons and M.loadedAddons[n] or false end }
 C_Timer = { After = function(_, f) end }
 function UnitClass() return "Démoniste", M.class, 9 end
 function UnitLevel() return M.level end
@@ -109,6 +109,6 @@ function UnitExists(u) return u == "target" and M.target ~= nil end
 local _UnitName = UnitName
 function UnitName(u) if u == "target" then return M.target end return _UnitName(u) end
 function ChatEdit_GetLastTellTarget() return M.lastTell end
-loadAddon("Core.lua"); loadAddon("data/Warlock.lua"); loadAddon("data/Social.lua"); loadAddon("data/WarlockTalents.lua"); loadAddon("Macro.lua"); loadAddon("Social.lua"); loadAddon("Talents.lua"); loadAddon("Gamepad.lua")
+loadAddon("Core.lua"); loadAddon("data/Warlock.lua"); loadAddon("data/Social.lua"); loadAddon("data/WarlockTalents.lua"); loadAddon("Macro.lua"); loadAddon("Social.lua"); loadAddon("Talents.lua"); loadAddon("Gamepad.lua"); loadAddon("RestedXP.lua")
 M.ns.frame.onEvent(nil, "ADDON_LOADED", "OneButtonRotation")
 return M

@@ -6,3 +6,7 @@ dist/
 *.swp
 *~
 .DS_Store
+# Guide RestedXP : chaîne d'import personnelle (payante, liée au compte) → jamais dans le dépôt public.
+# Elle est injectée au build (build.sh) depuis private/, ou depuis l'URL secrète RXP_GUIDE_URL en CI.
+private/
+OneButtonRotation/data/RestedXP_Guide.lua

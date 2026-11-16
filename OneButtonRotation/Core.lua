@@ -346,6 +346,7 @@ local function Help()
   Print("  /obr rangs           rang le plus élevé connu pour chaque sort de la macro (à comparer avec le maître)")
   Print("  /obr talents         ordre des points de talents niveau par niveau (guide Method) et où tu en es ; « chat » = résumé dans le chat")
   Print("  /obr aide            explication des macros dans une fenêtre à part, en grand (A+ / A-)")
+  Print("  /obr rxp             guide RestedXP embarqué : état, import, copie du texte")
   Print("  /obr pad             liste la barre manette de Forever ; /obr pad social <page> <barre> <bouton> y pose la macro")
 end
 
@@ -465,6 +466,8 @@ function ns.HandleSlash(msg)
     end
   elseif cmd == "pad" or cmd == "manette" then
     if ns.HandlePadCommand then ns.HandlePadCommand(rest) else Print("Module manette non chargé.") end
+  elseif cmd == "rxp" or cmd == "restedxp" then
+    if rest == "chat" or rest == "print" then ns.RestedXPReport() else ns.ToggleUI("restedxp") end
   elseif cmd == "aide" or cmd == "macros" then
     if ns.ToggleMacroHelp then ns.ToggleMacroHelp() end
   elseif cmd == "options" or cmd == "social-page" then

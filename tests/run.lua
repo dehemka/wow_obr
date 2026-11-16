@@ -211,5 +211,42 @@ M.chat = {}; ns.HandlePadCommand("")
 expect(#M.chat >= 4 and M.chat[2]:find("Page 1", 1, true) ~= nil, "barre manette : /obr pad liste les pages")
 M.chat = {}; ns.HandlePadCommand("social 1 1")
 expect(M.chat[1]:find("Usage", 1, true) ~= nil, "barre manette : arguments incomplets -> usage")
+-- Cas 19 : guide RestedXP embarqué
+local h = ns.RXPHeader("213|2295048190:D+Gz4rzZp0u1D418eW4wwtXR5iOwTlVhA%|40000")
+expect(h and h.nGuides == 213 and h.id == 2295048190 and h.base == 40000, "RestedXP : en-tête 213 guides / id / base 40000")
+expect(ns.RXPHeader("") == nil and ns.RXPHeader("n'importe quoi") == nil, "RestedXP : en-tête invalide -> nil")
+ns.RestedXPGuide = nil
+local st = ns.RestedXPStatus()
+expect(st.hasGuide == false and st.rxpLoaded == false, "RestedXP : sans guide ni addon")
+local okImp, msgImp = ns.ImportRestedXP()
+expect(okImp == false and msgImp:find("Aucun guide", 1, true) ~= nil, "RestedXP : import refusé sans guide")
+ns.RestedXPGuide = { name = "Test", generated = "2026-11-16", text = "2|123:QUJD%|40000" }
+ns.RestedXPGuide.size = #ns.RestedXPGuide.text
+st = ns.RestedXPStatus()
+expect(st.hasGuide and st.nGuides == 2 and st.id == 123 and st.rxpLoaded == false, "RestedXP : guide embarqué lu, addon absent")
+okImp, msgImp = ns.ImportRestedXP()
+expect(okImp == false and msgImp:find("pas chargé", 1, true) ~= nil, "RestedXP : import refusé sans RXPGuides")
+-- RestedXP présent, guide pas encore importé
+local calls = 0
+_G.RXPGuides = { version = 40000, db = { profile = { guideId = 1, guideLength = 1 } },
+  LoadCachedGuides = function() calls = calls + 1 end,
+  guideImporter = { Open = function() end } }
+M.loadedAddons = { RXPGuides = true }
+st = ns.RestedXPStatus()
+expect(st.rxpLoaded and st.compatible == true and st.imported == false, "RestedXP : chargé, compatible, pas importé")
+okImp, msgImp = ns.ImportRestedXP()
+expect(okImp == true and calls == 1 and RXPString == ns.RestedXPGuide.text, "RestedXP : import appelle LoadCachedGuides et pose RXPString")
+-- déjà importé
+_G.RXPGuides.db.profile.guideId, _G.RXPGuides.db.profile.guideLength = 123, 2
+st = ns.RestedXPStatus()
+okImp, msgImp = ns.ImportRestedXP()
+expect(st.imported == true and okImp == true and calls == 1 and msgImp:find("déjà", 1, true) ~= nil, "RestedXP : déjà importé -> pas de réimport")
+-- guide plus ancien que RestedXP (base 40000 < version 50000) : refusé
+_G.RXPGuides.version = 50000; _G.RXPGuides.db.profile.guideId = 1
+st = ns.RestedXPStatus(); okImp, msgImp = ns.ImportRestedXP()
+expect(st.compatible == false and okImp == false and msgImp:find("mets RestedXP", 1, true) ~= nil, "RestedXP : guide trop ancien pour la version de RestedXP -> refusé")
+_G.RXPGuides = nil; M.loadedAddons = nil
+M.chat = {}; ns.RestedXPReport()
+expect(M.chat[1] and M.chat[1]:find("2 guides", 1, true) ~= nil, "RestedXP : /obr rxp chat résume le guide")
 ns.DebugInfo()
 if _G.FAILED then os.exit(1) end
