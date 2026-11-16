@@ -97,22 +97,17 @@ else
 fi
 echo "✅ Uploadé : $ZIP_NAME, $LATEST_NAME, $(basename "$SHORT_KEY"), version.txt"
 
-# 2b. Guide RestedXP privé : copie à une URL non devinable (hors dépôt), lue par GitHub Actions
-#     via le secret RXP_GUIDE_URL. L'URL est mémorisée dans private/rxp_url.txt (ignoré par git).
+# 2b. Addon compagnon DMK_RXP (guide RestedXP personnel, hors dépôt git) : zip déployé à part,
+#     à une adresse non listée, à installer une fois à la main (WoWDeck > Manual Install, lien direct).
 RXP_SRC="$SCRIPT_DIR/private/restedxp_guide.txt"
-RXP_URL_FILE="$SCRIPT_DIR/private/rxp_url.txt"
+RXP_KEY="public/wow/addon/secret/DMK_RXP.zip"
+RXP_URL="https://storage.dehemka.net/$RXP_KEY"
 if [[ -s "$RXP_SRC" ]]; then
-  if [[ ! -s "$RXP_URL_FILE" ]]; then
-    RAND=$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
-    echo "https://storage.dehemka.net/public/wow/p/$RAND/restedxp_guide.txt" > "$RXP_URL_FILE"
-    echo "🔑 URL privée du guide RestedXP créée : $(<"$RXP_URL_FILE")"
-    echo "   → à mettre dans le secret GitHub RXP_GUIDE_URL (Settings → Secrets and variables → Actions)."
-  fi
-  RXP_URL=$(<"$RXP_URL_FILE")
-  RXP_KEY=${RXP_URL#https://storage.dehemka.net/}
-  run aws s3 cp "$RXP_SRC" "$S3_BUCKET/$RXP_KEY" --profile "$AWS_PROFILE" \
-    --content-type "text/plain; charset=utf-8" --cache-control "private, no-store"
-  echo "✅ Guide RestedXP privé en ligne ($(du -h "$RXP_SRC" | cut -f1))."
+  echo "📦 2b  Addon compagnon DMK_RXP..."
+  run "$SCRIPT_DIR/tools/gen_rxp_guide.sh" >/dev/null
+  run aws s3 cp "$SCRIPT_DIR/dist/DMK_RXP.zip" "$S3_BUCKET/$RXP_KEY" --profile "$AWS_PROFILE" \
+    --content-type "application/zip" --cache-control "private, no-store"
+  echo "✅ DMK_RXP.zip en ligne : $RXP_URL"
 fi
 
 # 3. Invalidation CloudFront
@@ -120,7 +115,7 @@ if [[ $INVALIDATE -eq 1 ]]; then
   echo "🔄 3/4 Invalidation CloudFront ($CLOUDFRONT_DIST_ID) sur /$S3_PREFIX/* et /$SHORT_KEY..."
   run aws cloudfront create-invalidation \
     --distribution-id "$CLOUDFRONT_DIST_ID" \
-    --paths "/$S3_PREFIX/*" "/$SHORT_KEY" \
+    --paths "/$S3_PREFIX/*" "/$SHORT_KEY" "/$RXP_KEY" \
     --profile "$AWS_PROFILE" >/dev/null
   echo "✅ Cache purgé."
 else
@@ -182,5 +177,6 @@ echo "🎉 Déploiement terminé."
 echo "🌐 Version  : $VERSIONED_URL"
 echo "🌐 Latest   : $LATEST_URL"
 echo "🌐 Court    : $SHORT_ZIP_URL"
+[[ -s "$RXP_SRC" ]] && echo "🔒 DMK_RXP  : $RXP_URL"
 [[ -n "$SHORT_URL" ]] && echo "🔗 is.gd    : $SHORT_URL"
 echo "=========================================================="

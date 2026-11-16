@@ -261,10 +261,10 @@ local function BuildRestedXPPage()
 
   local how = Label(p, table.concat({
     "|cffffd100Comment ça marche|r",
-    "Le fichier d'export RestedXP est embarqué dans l'addon (data/RestedXP_Guide.lua, généré au build).",
-    "Au chargement, RestedXP lit la variable RXPString et importe le guide tout seul s'il ne l'a pas déjà :",
-    "sa fenêtre d'import s'ouvre, puis les guides apparaissent dans son menu. Rien à copier.",
-    "La chaîne est liée à ton compte Battle.net : elle ne sert à personne d'autre.",
+    "Ton export RestedXP est dans un petit addon à part, DMK_RXP (zip privé, installé une fois à la main).",
+    "Au chargement, RestedXP lit la variable RXPString que DMK_RXP a posée et importe le guide tout seul",
+    "s'il ne l'a pas déjà : sa fenêtre d'import s'ouvre, puis les guides apparaissent dans son menu.",
+    "Rien à copier. Pour changer de guide : nouveau DMK_RXP.zip, et RestedXP réimporte à la connexion.",
   }, "\n"), "GameFontHighlightSmall")
   how:SetPoint("TOPLEFT", 4, -170)
   how:SetPoint("RIGHT", -4, 0)
@@ -275,8 +275,8 @@ local function BuildRestedXPPage()
   local copyTitle = Label(p, "Copier-coller à la main (secours)")
   copyTitle:SetPoint("TOPLEFT", 4, -268)
   local show = Button(p, "Afficher le texte à copier", 200, 22, function()
-    local g = ns.RestedXPGuide
-    if not (g and g.text) then Print("Aucun guide embarqué.") return end
+    local g = ns.RestedXPGuideData()
+    if not g then Print("Aucun guide : installe l'addon compagnon DMK_RXP.") return end
     local box = p.copyBox
     if box:IsShown() and box.filled then
       box:SetText("") box.filled = nil box:Hide() p.copyHint:Hide()
@@ -308,7 +308,8 @@ local function BuildRestedXPPage()
   box:SetScript("OnMouseUp", function(self) self:HighlightText() end)
   box:SetScript("OnTextChanged", function(self, user)
     -- lecture seule : si l'utilisateur tape, on remet le texte
-    if user and self.filled and ns.RestedXPGuide then self:SetText(ns.RestedXPGuide.text) self:HighlightText() end
+    local g = user and self.filled and ns.RestedXPGuideData()
+    if g then self:SetText(g.text) self:HighlightText() end
   end)
   box:Hide()
   p.copyBox = box
@@ -327,11 +328,12 @@ local function RefreshRestedXPPage(p)
   local s = ns.RestedXPStatus()
   local lines = {}
   if s.hasGuide then
-    lines[#lines + 1] = ("|cffffd100Guide embarqué :|r %s"):format(s.name or "?")
+    lines[#lines + 1] = ("|cffffd100Guide (addon DMK_RXP) :|r %s"):format(s.name or "?")
     lines[#lines + 1] = ("%s guides, %.0f Ko, généré le %s%s"):format(tostring(s.nGuides or "?"), (s.size or 0) / 1024,
       s.generated or "?", s.base and (", pour RestedXP " .. s.base) or "")
   else
-    lines[#lines + 1] = "|cffff6060Aucun guide embarqué dans cette version de l'addon.|r"
+    lines[#lines + 1] = s.companionLoaded and "|cffff6060L'addon DMK_RXP est chargé mais ne contient aucun guide.|r"
+      or "|cffff6060Aucun guide : l'addon compagnon DMK_RXP n'est pas installé (zip privé, Manual Install dans WoWDeck).|r"
   end
   if s.rxpLoaded then
     lines[#lines + 1] = ("|cffffd100RestedXP :|r chargé%s%s"):format(s.rxpVersion and (" (v" .. s.rxpVersion .. ")") or "",

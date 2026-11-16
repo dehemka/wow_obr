@@ -46,24 +46,6 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "iface=$IFACE" >> "$GITHUB_OUTPUT"
 
-      # Guide RestedXP (export personnel, pas dans le dépôt) : secret RXP_GUIDE_URL = URL privée du .txt.
-      # Sans secret, le zip part sans guide (l'onglet RestedXP l'indique).
-      - name: Récupérer le guide RestedXP privé
-        if: steps.check.outputs.skip != 'true'
-        env:
-          RXP_GUIDE_URL: ${{ secrets.RXP_GUIDE_URL }}
-          RXP_GUIDE_NAME: ${{ secrets.RXP_GUIDE_NAME }}
-        run: |
-          set -euo pipefail
-          mkdir -p private
-          if [[ -n "${RXP_GUIDE_URL:-}" ]]; then
-            curl -sSf -o private/restedxp_guide.txt "$RXP_GUIDE_URL"
-            [[ -n "${RXP_GUIDE_NAME:-}" ]] && echo "$RXP_GUIDE_NAME" > private/restedxp_guide.name
-            echo "Guide RestedXP récupéré : $(wc -c < private/restedxp_guide.txt) octets"
-          else
-            echo "Pas de secret RXP_GUIDE_URL : zip sans guide RestedXP."
-          fi
-
       - name: Construire le zip et release.json
         if: steps.check.outputs.skip != 'true'
         run: |

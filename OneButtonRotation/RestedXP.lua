@@ -1,7 +1,8 @@
--- OneButtonRotation - Guide RestedXP embarqué
--- La chaîne d'import (data/RestedXP_Guide.lua, généré) est exposée dans la globale RXPString :
--- RestedXP la lit à son chargement (GuideLoader.lua, LoadCachedGuides) et importe le guide tout seul
--- la première fois, puis réutilise son cache. Ici : état, import manuel et copie du texte.
+-- OneButtonRotation - Guide RestedXP (addon compagnon DMK_RXP)
+-- Le guide personnel est dans un addon à part, DMK_RXP (généré par tools/gen_rxp_guide.sh, distribué
+-- hors GitHub). Il expose la globale DMK_RXP { name, generated, size, text } et pose la chaîne dans
+-- RXPString : RestedXP la lit à son chargement (GuideLoader.lua, LoadCachedGuides) et importe le guide
+-- tout seul la première fois, puis réutilise son cache. Ici : état, import manuel et copie du texte.
 
 local ADDON_NAME, ns = ...
 local Print = ns.Print
@@ -22,9 +23,23 @@ local function RXP()
   return rxp
 end
 
-function ns.RestedXPStatus()
+ns.RXP_COMPANION = "DMK_RXP"
+
+-- Guide disponible : addon compagnon DMK_RXP (globale), ou ns.RestedXPGuide (tests / autre source)
+function ns.RestedXPGuideData()
   local g = ns.RestedXPGuide
-  local s = { hasGuide = g ~= nil and g.text ~= nil and #g.text > 0 }
+  if g == nil then
+    local c = rawget(_G, ns.RXP_COMPANION)
+    if type(c) == "table" then g = c end
+  end
+  if type(g) == "table" and type(g.text) == "string" and #g.text > 0 then return g end
+  return nil
+end
+
+function ns.RestedXPStatus()
+  local g = ns.RestedXPGuideData()
+  local s = { hasGuide = g ~= nil }
+  s.companionLoaded = C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded(ns.RXP_COMPANION) and true or false
   if s.hasGuide then
     s.name, s.size, s.generated = g.name, g.size or #g.text, g.generated
     local h = ns.RXPHeader(g.text)
@@ -47,7 +62,7 @@ end
 -- Demande à RestedXP de (ré)importer la chaîne embarquée. Retourne ok, message.
 function ns.ImportRestedXP()
   local s = ns.RestedXPStatus()
-  if not s.hasGuide then return false, "Aucun guide RestedXP n'est embarqué dans cette version de l'addon." end
+  if not s.hasGuide then return false, "Aucun guide RestedXP : installe l'addon compagnon " .. ns.RXP_COMPANION .. "." end
   local rxp = RXP()
   if not rxp then return false, "RestedXP (RXPGuides) n'est pas chargé." end
   if s.compatible == false then
@@ -58,7 +73,7 @@ function ns.ImportRestedXP()
     return true, "Ce guide est déjà importé dans RestedXP."
   end
   if InCombatLockdown and InCombatLockdown() then return false, "Pas en combat." end
-  RXPString = s.hasGuide and ns.RestedXPGuide.text or RXPString
+  RXPString = ns.RestedXPGuideData().text
   if type(rxp.LoadCachedGuides) ~= "function" then
     return false, "Cette version de RestedXP n'expose pas LoadCachedGuides : passe par la copie du texte."
   end
@@ -78,7 +93,7 @@ end
 
 function ns.RestedXPReport()
   local s = ns.RestedXPStatus()
-  if not s.hasGuide then Print("RestedXP : aucun guide embarqué dans cette version.") return end
+  if not s.hasGuide then Print("RestedXP : aucun guide, l'addon compagnon %s n'est pas installé.", ns.RXP_COMPANION) return end
   Print("RestedXP : guide « %s », %d guides, %.0f Ko, généré le %s.", s.name or "?", s.nGuides or 0, (s.size or 0) / 1024, s.generated or "?")
   Print("RestedXP %s%s%s.", s.rxpLoaded and "chargé" or "non chargé", s.rxpVersion and (" v" .. s.rxpVersion) or "",
     s.imported == true and ", guide déjà importé" or (s.imported == false and ", guide pas encore importé" or ""))

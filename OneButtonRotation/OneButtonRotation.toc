@@ -12,7 +12,6 @@ Core.lua
 data/Warlock.lua
 data/Social.lua
 data/WarlockTalents.lua
-data/RestedXP_Guide.lua
 Macro.lua
 UI.lua
 Minimap.lua

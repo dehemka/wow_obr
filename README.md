@@ -5,7 +5,7 @@ Addon pour **World of Warcraft Forever** qui génère et tient à jour des macro
 et ton équipement. Il relit ton grimoire et régénère les macros au level up, à chaque
 nouveau sort, changement de talents ou baguette équipée. Pensé pour jouer à la manette
 (Steam Deck) : anneau social radial, rappel de l'ordre des talents, placement direct
-sur la barre manette, guide RestedXP embarqué et importé automatiquement.
+sur la barre manette, import automatique de ton guide RestedXP (addon compagnon privé).
 
 Classe supportée : **Démoniste** (Affliction, Démonologie, Destruction), rotations de
 leveling solo d'après le guide Method.
@@ -44,8 +44,8 @@ Le mode d'emploi complet, les commandes et le dépannage sont dans
   du .toc publie une Release, sans rien d'autre à faire. Si le secret `DISCORD_WEBHOOK` est
   défini dans les paramètres du repo, un message Discord est envoyé à chaque Release.
 - Le numéro de version se change dans `OneButtonRotation/OneButtonRotation.toc` (`## Version:`).
-- Guide RestedXP : l'export personnel (`private/restedxp_guide.txt`, ignoré par git) est converti au
-  build en `data/RestedXP_Guide.lua` par `tools/gen_rxp_guide.sh`. En CI il est téléchargé depuis le
-  secret `RXP_GUIDE_URL` (URL privée mise en ligne par `deploy.sh`). Sans secret, le zip part sans guide.
+- Guide RestedXP : l'export personnel (`private/restedxp_guide.txt`, ignoré par git) devient un addon
+  compagnon `DMK_RXP` construit par `tools/gen_rxp_guide.sh` et déployé par `deploy.sh` hors GitHub.
+  Le dépôt et les Releases publiques ne contiennent jamais le guide.
 
 Licence MIT.

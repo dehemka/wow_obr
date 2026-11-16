@@ -93,20 +93,20 @@ en es. Au level up, le chat rappelle le talent à prendre. `/obr talents chat` d
 chat. Les talents sont lus via `C_SpecializationInfo.GetTalentInfo` ; sans cette API l'état est
 approximatif. L'ordre est dans `data/WarlockTalents.lua` (Method ne détaille que le build Affliction).
 
-### Guide RestedXP embarqué
+### Guide RestedXP (addon compagnon DMK_RXP)
 
-Onglet **RestedXP** (ou `/obr rxp`). L'export de ton guide RestedXP (le fichier `.txt` téléchargé
-sur leur site) est embarqué dans l'addon : au chargement, RestedXP lit la variable `RXPString`
-et importe le guide tout seul la première fois (sa fenêtre d'import s'ouvre, puis les guides
-apparaissent dans son menu). Rien à copier sur le Steam Deck.
+Onglet **RestedXP** (ou `/obr rxp`). Ton export RestedXP (le `.txt` téléchargé sur leur site) est
+transformé en un petit addon à part, **DMK_RXP**, distribué hors GitHub (zip privé sur ton stockage,
+à installer une fois à la main : WoWDeck → Manual Install → lien direct du zip). Au chargement,
+RestedXP lit la variable `RXPString` que DMK_RXP a posée et importe le guide tout seul la première
+fois (sa fenêtre d'import s'ouvre, puis les guides apparaissent dans son menu). Rien à copier.
 
-L'onglet montre l'état (guide embarqué, RestedXP chargé, guide importé ou non), un bouton
+L'onglet montre l'état (DMK_RXP présent, RestedXP chargé, guide importé ou non), un bouton
 « Importer maintenant » si l'import automatique n'a pas eu lieu, et en secours un bouton qui met
 tout le texte dans une zone déjà sélectionnée pour un Ctrl+C / Ctrl+V dans RestedXP > Import.
 
-Le fichier n'est pas dans le dépôt GitHub (export personnel, lié à ton compte) : il est injecté au
-build depuis `private/restedxp_guide.txt`, ou en CI depuis l'URL secrète `RXP_GUIDE_URL`. Pour
-changer de guide : remplace `private/restedxp_guide.txt`, puis `./deploy.sh --release`.
+Pour changer de guide : remplace `private/restedxp_guide.txt`, puis `./deploy.sh` reconstruit
+`dist/DMK_RXP.zip` (via `tools/gen_rxp_guide.sh`) et le met en ligne ; réinstalle-le sur le Deck.
 
 ### Phases démoniste
 

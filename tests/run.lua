@@ -220,10 +220,11 @@ local st = ns.RestedXPStatus()
 expect(st.hasGuide == false and st.rxpLoaded == false, "RestedXP : sans guide ni addon")
 local okImp, msgImp = ns.ImportRestedXP()
 expect(okImp == false and msgImp:find("Aucun guide", 1, true) ~= nil, "RestedXP : import refusé sans guide")
-ns.RestedXPGuide = { name = "Test", generated = "2026-11-16", text = "2|123:QUJD%|40000" }
-ns.RestedXPGuide.size = #ns.RestedXPGuide.text
+_G.DMK_RXP = { name = "Test", generated = "2026-11-16", text = "2|123:QUJD%|40000" }
+_G.DMK_RXP.size = #_G.DMK_RXP.text
+M.loadedAddons = { DMK_RXP = true }
 st = ns.RestedXPStatus()
-expect(st.hasGuide and st.nGuides == 2 and st.id == 123 and st.rxpLoaded == false, "RestedXP : guide embarqué lu, addon absent")
+expect(st.hasGuide and st.companionLoaded and st.nGuides == 2 and st.id == 123 and st.rxpLoaded == false, "RestedXP : guide lu depuis l'addon compagnon DMK_RXP, RestedXP absent")
 okImp, msgImp = ns.ImportRestedXP()
 expect(okImp == false and msgImp:find("pas chargé", 1, true) ~= nil, "RestedXP : import refusé sans RXPGuides")
 -- RestedXP présent, guide pas encore importé
@@ -231,11 +232,11 @@ local calls = 0
 _G.RXPGuides = { version = 40000, db = { profile = { guideId = 1, guideLength = 1 } },
   LoadCachedGuides = function() calls = calls + 1 end,
   guideImporter = { Open = function() end } }
-M.loadedAddons = { RXPGuides = true }
+M.loadedAddons = { RXPGuides = true, DMK_RXP = true }
 st = ns.RestedXPStatus()
 expect(st.rxpLoaded and st.compatible == true and st.imported == false, "RestedXP : chargé, compatible, pas importé")
 okImp, msgImp = ns.ImportRestedXP()
-expect(okImp == true and calls == 1 and RXPString == ns.RestedXPGuide.text, "RestedXP : import appelle LoadCachedGuides et pose RXPString")
+expect(okImp == true and calls == 1 and RXPString == _G.DMK_RXP.text, "RestedXP : import appelle LoadCachedGuides et pose RXPString")
 -- déjà importé
 _G.RXPGuides.db.profile.guideId, _G.RXPGuides.db.profile.guideLength = 123, 2
 st = ns.RestedXPStatus()
@@ -248,5 +249,7 @@ expect(st.compatible == false and okImp == false and msgImp:find("mets RestedXP"
 _G.RXPGuides = nil; M.loadedAddons = nil
 M.chat = {}; ns.RestedXPReport()
 expect(M.chat[1] and M.chat[1]:find("2 guides", 1, true) ~= nil, "RestedXP : /obr rxp chat résume le guide")
+_G.DMK_RXP = nil
+expect(ns.RestedXPStatus().hasGuide == false, "RestedXP : sans DMK_RXP, plus de guide")
 ns.DebugInfo()
 if _G.FAILED then os.exit(1) end

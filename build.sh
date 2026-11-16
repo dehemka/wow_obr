@@ -4,8 +4,6 @@ set -euo pipefail
 cd "$(dirname "$0")"
 VERSION=$(sed -n 's/^## Version: *//p' OneButtonRotation/OneButtonRotation.toc | tr -d '\r')
 mkdir -p dist
-# Guide RestedXP embarqué (private/restedxp_guide.txt si présent, sinon fichier vide)
-tools/gen_rxp_guide.sh >/dev/null
 OUT="dist/OneButtonRotation-${VERSION}.zip"
 rm -f "$OUT"
 zip -r -X "$OUT" OneButtonRotation -x '*.swp' -x '*~' -x '*/.*'
