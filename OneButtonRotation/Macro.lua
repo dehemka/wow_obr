@@ -302,6 +302,36 @@ end
 -------------------------------------------------------------------------------
 -- Construction
 -------------------------------------------------------------------------------
+-- Rang le plus élevé connu d'un sort (1 si rang unique, sous-titre absent ou grimoire inaccessible)
+function ns.MaxKnownRank(spellName)
+  local ranks = ns.KnownRanks(spellName)
+  local top = ranks and ranks[#ranks]
+  return top and top.rank or 1
+end
+
+-- Assemble les sorts d'un /castsequence. Après chaque sort, la virgule est suivie d'autant
+-- d'espaces que son rang connu (rankOf(nom) → entier ≥ 1), donc « , » pour un rang 1.
+--
+-- Pourquoi : le client (Blizzard_ChatFrameBase/CastSequenceManager.lua) mémorise, au premier
+-- appui, l'ID de sort de chaque étape d'après le TEXTE de la séquence, et garde cette table
+-- jusqu'au /reload (CastSequenceFreeList n'est jamais vidée). Quand on apprend un nouveau
+-- rang, « Corruption » lance le rang 3 mais l'étape attend toujours l'ID du rang 2 : elle
+-- n'avance plus et la macro relance le même sort en boucle. Les étapes sont découpées par
+-- strsplit(",") puis strtrim(), donc les espaces ne changent rien au comportement, mais ils
+-- changent le texte : nouveau rang → nouveau texte → le client relit les IDs. Les rangs ne
+-- faisant que monter, un texte déjà vu n'est jamais réutilisé avec d'autres IDs.
+function ns.JoinSequence(parts, rankOf)
+  local out = {}
+  for i, name in ipairs(parts) do
+    if i > 1 then
+      local rank = rankOf and tonumber(rankOf(parts[i - 1])) or 1
+      out[#out + 1] = "," .. string.rep(" ", math.max(1, math.floor(rank)))
+    end
+    out[#out + 1] = name
+  end
+  return table.concat(out)
+end
+
 -- Construit une macro. Retourne body, info  ou  nil, raison
 -- info = { included = {noms}, skipped = {{nom|texte, raison}}, fillerCount = }
 local function BuildOne(def, ctx)
@@ -348,6 +378,13 @@ local function BuildOne(def, ctx)
     return nil, "aucun sort utilisable"
   end
 
+  -- Rang connu de chaque sort de la séquence (mémorisé : le grimoire n'est parcouru qu'une fois)
+  local rankOf = {}
+  local function RankOf(name)
+    if rankOf[name] == nil then rankOf[name] = ns.MaxKnownRank((name:gsub("^!", ""))) end
+    return rankOf[name]
+  end
+
   local function Assemble(fillerCount)
     local all = {}
     for _, l in ipairs(lines) do table.insert(all, l) end
@@ -356,7 +393,7 @@ local function BuildOne(def, ctx)
       for _, n in ipairs(seq) do table.insert(parts, n) end
       if fillerName then for _ = 1, fillerCount do table.insert(parts, fillerName) end end
       local cmd = "/castsequence " .. (def.conditions and (def.conditions .. " ") or "")
-        .. "reset=" .. (def.reset or "target/combat") .. " " .. table.concat(parts, ", ")
+        .. "reset=" .. (def.reset or "target/combat") .. " " .. ns.JoinSequence(parts, RankOf)
       table.insert(all, cmd)
     end
     for _, l in ipairs(after) do table.insert(all, l) end

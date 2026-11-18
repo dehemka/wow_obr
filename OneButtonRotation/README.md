@@ -198,6 +198,15 @@ prévient. La macro écrit les sorts sans numéro de rang, donc elle lance toujo
 rang 1. `/obr rangs` liste le rang connu de chaque sort de la macro, et l'addon rappelle le
 maître à chaque niveau pair.
 
+**La macro relance le même sort en boucle après un nouveau rang** (ex. Corruption au niveau 24) :
+c'est un comportement du client. Le `/castsequence` mémorise, au premier appui, l'ID de chaque
+étape d'après le texte de la séquence et ne le relit jamais (jusqu'au `/reload`). Après un
+nouveau rang, « Corruption » lance le rang 3 mais l'étape attend l'ID du rang 2 : elle n'avance
+plus. Depuis la 0.5.1, l'addon encode le rang connu dans le texte de la macro (le nombre d'espaces
+après chaque virgule = rang du sort, invisible pour le jeu) et la réécrit dès qu'un sort est
+appris : le client relit alors les IDs. Si ça arrive quand même (rang appris en combat, addon
+pas chargé), `/reload` suffit.
+
 **Autres problèmes** : tape `/obr info` et copie le résultat : il indique la version du client, quelles fonctions
 d'API existent et si chaque sort de la rotation est détecté comme connu.
 
@@ -228,7 +237,8 @@ avec ses macros. Le format complet est commenté en tête de `data/Warlock.lua`.
 
 Les IDs sont ceux du rang 1 ; le nom est résolu en jeu dans la langue du client (ce qui
 suit les renommages de Forever), et un `/castsequence` sans rang lance toujours le rang le
-plus élevé connu. Une entrée peut porter `minLevel`, `maxLevel`, `talent` (ID à connaître),
+plus élevé connu. Dans la séquence, chaque virgule est suivie d'autant d'espaces que le rang
+connu du sort qui la précède (`ns.JoinSequence`) : voir « relance le même sort en boucle ». Une entrée peut porter `minLevel`, `maxLevel`, `talent` (ID à connaître),
 `wand` / `nowand` (baguette équipée ou non), `option` (clé d'option) ou `alt` (liste
 d'entrées, la première utilisable gagne).
 

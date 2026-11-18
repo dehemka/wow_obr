@@ -251,5 +251,24 @@ M.chat = {}; ns.RestedXPReport()
 expect(M.chat[1] and M.chat[1]:find("2 guides", 1, true) ~= nil, "RestedXP : /obr rxp chat résume le guide")
 _G.DMK_RXP = nil
 expect(ns.RestedXPStatus().hasGuide == false, "RestedXP : sans DMK_RXP, plus de guide")
+-- Cas 20 : nouveau rang appris -> le texte du /castsequence change (le client fige les IDs
+-- par texte de séquence ; sans changement de texte, la macro boucle sur le même sort)
+expect(ns.JoinSequence({ "A", "B", "C" }) == "A, B, C", "JoinSequence sans rangs = virgule + 1 espace")
+expect(ns.JoinSequence({ "A", "B", "!C", "!C" }, function(n) return ({ A = 2, B = 3 })[n] or 1 end) == "A,  B,   !C, !C",
+  "JoinSequence : autant d'espaces après un sort que son rang connu")
+expect(ns.JoinSequence({ "A", "B" }, function() return nil end) == "A, B", "JoinSequence : rang inconnu = 1 espace")
+ns.db.spec[ns.CharKey()] = "AFFLICTION"
+M.level = 24; M.known = K(SB, IMMO, CORR, TAP, AGONY, DRAIN, SHOOT); M.wand = true
+M.spellbook = { {id=172,name="Corruption",sub="Rang 1"}, {id=6222,name="Corruption",sub="Rang 2"}, {id=6223,name="Corruption",sub="Rang 3"},
+  {id=980,name="Malédiction d'agonie",sub="Rang 1"}, {id=1014,name="Malédiction d'agonie",sub="Rang 2"}, {id=5019,name="Tir"}, {id=689,name="Drain de vie",sub="Rang 3"} }
+expect(ns.MaxKnownRank("Corruption") == 3 and ns.MaxKnownRank("Tir") == 1 and ns.MaxKnownRank("Inconnu") == 1, "MaxKnownRank : 3 / 1 / 1")
+b = body("OBR"); print(b)
+expect(b == "#showtooltip\n/petattack\n/castsequence reset=target/combat/10 Malédiction d'agonie,  Corruption,   !Tir, !Tir, !Tir, !Tir",
+  "niveau 24 : Plaie d'agonie rang 2 → 2 espaces, Corruption rang 3 → 3 espaces, Tir sans rang → 1")
+-- le texte avec les rangs du niveau 15 est différent : le client relira les IDs après la mise à jour de la macro
+M.spellbook[3] = nil
+expect(body("OBR") ~= b, "un rang de moins = texte de macro différent")
+M.spellbook = nil
+expect(body("OBR"):find("Malédiction d'agonie, Corruption, !Tir", 1, true) ~= nil, "sans sous-titres de rang : texte d'origine inchangé")
 ns.DebugInfo()
 if _G.FAILED then os.exit(1) end

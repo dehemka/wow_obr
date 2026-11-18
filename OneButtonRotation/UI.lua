@@ -424,7 +424,8 @@ local function BuildHelpPage()
     "",
     "|cffffd100Rappels|r",
     "Les rangs de sorts s'achètent chez le maître, en général tous les 2 niveaux : la macro lance",
-    "toujours le rang le plus élevé connu.",
+    "toujours le rang le plus élevé connu. Si elle relance le même sort en boucle après un nouveau",
+    "rang, fais /reload (l'addon réécrit la macro pour l'éviter, mais pas en combat).",
     "Le guide suivi est celui de Method (WoW Forever Warlock Leveling Guide).",
   }, "\n"))
 end
