@@ -41,9 +41,20 @@ Trois macros de personnage sont créées :
 - **OBR_VIE** : le sustain. Clic = Drain de vie, Shift+clic = Connexion (ou Pacte noir si tu
   as le talent).
 - **OBR_SOCIAL** : ouvre l'anneau social (voir ci-dessous). Contient juste `/obr social`.
+- **Macros rapides** (un bouton = une phrase, courte, en français puis en anglais) :
+  - **OBR_GROUPE** : `/invite` ta cible, puis lui chuchote « Groupe ? / Group? » (si la cible
+    n'est pas un joueur, le texte part dans le canal courant).
+  - **OBR_OUI** : « Oui / Yes » avec l'emote /oui.
+  - **OBR_NON** : « Non / No » avec l'emote /non.
+  - **OBR_MERCI** : « Merci / Thank you <cible> » puis « GL HF », avec l'emote /merci.
 
-Glisse-les une fois sur ta barre depuis `/macro`, ou tape `/obr slot 1`, `/obr slot vie 2` et
-`/obr slot social 3` pour que l'addon les pose lui-même (emplacements 1 à 12 = barre principale).
+  Chacune contient `/obr say <clé>` : l'addon joue l'emote et parle dans le canal choisi dans
+  l'anneau (Auto = raid, groupe, sinon dire). `/obr say off` ne les crée plus. Les textes sont
+  dans `data/Social.lua` (`ns.QuickMacros`).
+
+Glisse-les une fois sur ta barre depuis `/macro`, ou tape `/obr slot 1`, `/obr slot vie 2`,
+`/obr slot social 3`, `/obr slot oui 4`… pour que l'addon les pose lui-même (emplacements 1 à 12 =
+barre principale). Sur la barre manette : `/obr pad oui 1 2 3` (voir plus bas).
 
 ### Anneau social
 
@@ -66,8 +77,8 @@ envoie un texte dans le canal choisi. `%t` dans un texte est remplacé par le no
 **Barre manette de Forever** : l'écran d'assignation de Blizzard refuse parfois la macro
 (« Impossible de sélectionner une action à associer à l'emplacement de manette »). L'addon peut la
 poser lui-même sur la barre manette : `/obr pad` liste les 3 pages × 4 barres × 8 boutons et leur
-contenu, puis `/obr pad social 1 2 3` pose OBR_SOCIAL sur la page 1, barre 2, bouton 3 (`obr` et
-`vie` marchent aussi). C'est exactement ce que fait l'écran de Blizzard (PlaceAction sur
+contenu, puis `/obr pad social 1 2 3` pose OBR_SOCIAL sur la page 1, barre 2, bouton 3 (`obr`,
+`vie`, `groupe`, `oui`, `non` et `merci` marchent aussi). C'est exactement ce que fait l'écran de Blizzard (PlaceAction sur
 l'emplacement de stockage manette), sans passer par son interface.
 
 **Lier un bouton de la manette** : tape `/obr bind` (ou le bouton « Lier l'anneau à un bouton
@@ -133,6 +144,8 @@ Feu de l'âme gratuit (proc Decimation), Peur, Drain d'âme.
 | `/obr slot <n>`       | pose OBR sur l'emplacement de barre n (0 = désactiver)       |
 | `/obr slot vie <n>`   | idem pour OBR_VIE                                            |
 | `/obr slot social <n>` | idem pour OBR_SOCIAL                                        |
+| `/obr slot groupe\|oui\|non\|merci <n>` | idem pour les macros rapides                 |
+| `/obr say <clé>`      | envoie une phrase rapide (groupe, oui, non, merci) ; `on`/`off` crée ou non les 4 macros |
 | `/obr social`         | ouvre / ferme l'anneau social ; `on`/`off` crée ou non la macro ; `keep` garde l'anneau ouvert après envoi ; `scale <n>` taille ; `reset` recentre |
 | `/obr auto on\|off`   | mise à jour automatique                                      |
 | `/obr strict on\|off` | `off` = inclure les sorts par niveau sans vérifier le grimoire |

@@ -50,4 +50,46 @@ ns.SocialMacroDef = {
     .. "Chaque phrase joue l'emote correspondante et envoie le texte dans le canal choisi.",
 }
 
+-- Macros rapides : un bouton = une phrase, sans ouvrir l'anneau. Textes courts, en français
+-- puis en anglais. Chaque macro contient « /obr say <clé> » (emote + texte dans le canal courant
+-- de l'anneau) ; toTarget = chuchoter à la cible si c'est un joueur ; invite = /invite d'abord ;
+-- texts = plusieurs lignes de chat envoyées à la suite.
+ns.QuickMacros = {
+  { key = "groupe", name = "OBR_GROUPE", slotKey = "actionSlotGroup", icon = "Interface\\Icons\\INV_Misc_GroupLooking",
+    invite = true, toTarget = true, emote = "BECKON", text = "Groupe ? / Group?",
+    desc = "Propose un groupe : /invite ta cible, puis lui chuchote « Groupe ? / Group? » "
+      .. "(ou l'écrit dans le canal courant si la cible n'est pas un joueur)." },
+  { key = "oui", name = "OBR_OUI", slotKey = "actionSlotYes", icon = "Interface\\Icons\\Spell_ChargePositive",
+    emote = "NOD", text = "Oui / Yes",
+    desc = "Dit « Oui / Yes » dans le canal courant de l'anneau (auto : raid, groupe, sinon dire) et hoche la tête." },
+  { key = "non", name = "OBR_NON", slotKey = "actionSlotNo", icon = "Interface\\Icons\\Spell_ChargeNegative",
+    emote = "NO", text = "Non / No",
+    desc = "Dit « Non / No » dans le canal courant et fait non de la tête." },
+  { key = "merci", name = "OBR_MERCI", slotKey = "actionSlotThanks", icon = "Interface\\Icons\\INV_Misc_Gift_01",
+    emote = "THANK", texts = { "Merci / Thank you %t", "GL HF" },
+    desc = "Remercie : « Merci / Thank you <cible> » puis « GL HF » sur deux lignes, avec l'emote /merci." },
+}
+for _, m in ipairs(ns.QuickMacros) do
+  m.noTooltip = true
+  m.lines = {}
+  if m.invite then table.insert(m.lines, "/invite") end
+  table.insert(m.lines, "/obr say " .. m.key)
+end
+
+-- Macro rapide par clé (« oui ») ou par nom (« OBR_OUI »), insensible à la casse
+function ns.QuickMacroByKey(key)
+  if type(key) ~= "string" then return nil end
+  key = key:lower()
+  for _, m in ipairs(ns.QuickMacros) do
+    if m.key == key or m.name:lower() == key then return m end
+  end
+  return nil
+end
+
+function ns.QuickMacroKeys()
+  local t = {}
+  for _, m in ipairs(ns.QuickMacros) do table.insert(t, m.key) end
+  return table.concat(t, "|")
+end
+
 ns.loadedFiles = (ns.loadedFiles or "") .. ", Social(data)"

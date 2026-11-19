@@ -80,7 +80,7 @@ function ns.GamepadBarReport(onlyPage)
       for _, line in ipairs(used) do Print(line) end
     end
   end
-  Print("Pour y poser une macro : /obr pad <obr|vie|social> <page> <barre> <bouton>")
+  Print("Pour y poser une macro : /obr pad <obr|vie|social|groupe|oui|non|merci> <page> <barre> <bouton>")
 end
 
 -- Pose une macro de l'addon sur un bouton de la barre manette
@@ -115,10 +115,11 @@ function ns.HandlePadCommand(rest)
     return
   end
   local alias = { obr = ns.db.macroName or "OBR", vie = "OBR_VIE", social = "OBR_SOCIAL" }
+  for _, m in ipairs(ns.QuickMacros or {}) do alias[m.key] = m.name end
   local name = alias[words[1]:lower()] or words[1]
   local page, bar, button = tonumber(words[2]), tonumber(words[3]), tonumber(words[4])
   if not (page and bar and button) then
-    Print("Usage : /obr pad <obr|vie|social> <page> <barre> <bouton>  (/obr pad seul liste la barre)")
+    Print("Usage : /obr pad <obr|vie|social|%s> <page> <barre> <bouton>  (/obr pad seul liste la barre)", ns.QuickMacroKeys and ns.QuickMacroKeys() or "groupe|oui|non|merci")
     return
   end
   ns.PlaceOnGamepadBar(name, page, bar, button)

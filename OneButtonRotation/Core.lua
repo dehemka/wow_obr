@@ -36,6 +36,8 @@ local DEFAULTS = {
   summonPet = false,     -- ajouter une ligne d'invocation du familier hors combat
   immolate = false,      -- Affliction 10-29 : ajouter Immolation en 3e DoT (hors guide Method)
   actionSlotSocial = nil, -- emplacement de barre de la macro OBR_SOCIAL
+  quickMacros = true,     -- créer les macros rapides OBR_GROUPE / OBR_OUI / OBR_NON / OBR_MERCI (/obr say <clé>)
+  actionSlotGroup = nil, actionSlotYes = nil, actionSlotNo = nil, actionSlotThanks = nil, -- leurs emplacements de barre
   socialMacro = true,    -- créer la macro OBR_SOCIAL (/obr social)
   socialChannel = "AUTO", -- dernier canal choisi dans l'anneau social
   socialKeepOpen = false, -- garder l'anneau ouvert après un envoi
@@ -330,7 +332,8 @@ local function Help()
   Print("  /obr spec <nom>      fixe la spé manuellement (ex: /obr spec affli)")
   Print("  /obr slot <n>        pose la macro OBR sur l'emplacement de barre n (0 = désactiver)")
   Print("  /obr slot vie <n>    idem pour la macro de sustain OBR_VIE")
-  Print("  /obr slot social <n> idem pour la macro OBR_SOCIAL")
+  Print("  /obr slot social <n> idem pour la macro OBR_SOCIAL ; /obr slot groupe|oui|non|merci <n> pour les macros rapides")
+  Print("  /obr say <clé>       envoie une phrase rapide (groupe = /invite + « Groupe ? / Group? », oui, non, merci = « Merci / Thank you » + « GL HF ») ; on|off = créer les 4 macros")
   Print("  /obr social          ouvre/ferme l'anneau social (phrases rapides + emotes) ; on|off = créer la macro ; keep = rester ouvert")
   Print("  /obr social scale <n> taille de l'anneau (0.5 à 2) ; /obr social reset le recentre")
   Print("  /obr auto on|off     mise à jour automatique au level up")
@@ -398,11 +401,14 @@ function ns.HandleSlash(msg)
     local which, num = rest:match("^(%a+)%s+(%d+)$")
     if which then
       rest = num
-      if which:lower() == "social" then key, label = "actionSlotSocial", "OBR_SOCIAL"
+      local w = which:lower()
+      local quick = ns.QuickMacroByKey and ns.QuickMacroByKey(w)
+      if w == "social" then key, label = "actionSlotSocial", "OBR_SOCIAL"
+      elseif quick then key, label = quick.slotKey, quick.name
       else key, label = "actionSlotSustain", "OBR_VIE" end
     end
     local n = tonumber(rest)
-    if not n then Print("Usage : /obr slot <1-120>, /obr slot vie <n>, /obr slot social <n> (0 pour désactiver)") return end
+    if not n then Print("Usage : /obr slot <1-120>, /obr slot vie <n>, /obr slot social <n>, /obr slot %s <n> (0 pour désactiver)", ns.QuickMacroKeys and ns.QuickMacroKeys() or "groupe|oui|non|merci") return end
     ns.db[key] = (n > 0) and n or nil
     Print("Emplacement de barre de %s : %s", label, ns.db[key] and tostring(ns.db[key]) or "désactivé")
   elseif cmd == "auto" then
@@ -420,6 +426,18 @@ function ns.HandleSlash(msg)
     ns.db.immolate = (rest ~= "off" and rest ~= "0")
     Print("Immolation en 3e DoT (Affliction 10-29) : %s", ns.db.immolate and "activée" or "désactivée")
     ns.Refresh("option Immolation")
+  elseif cmd == "say" or cmd == "dire" then
+    local sub = rest:lower()
+    if sub == "on" or sub == "off" then
+      ns.db.quickMacros = (sub == "on")
+      Print("Macros rapides (OBR_GROUPE, OBR_OUI, OBR_NON, OBR_MERCI) : %s", ns.db.quickMacros and "activées" or "désactivées")
+      ns.Refresh("option macros rapides")
+    elseif sub == "" or not ns.QuickSay then
+      Print("Usage : /obr say <%s> ; /obr say on|off crée ou non les macros rapides", ns.QuickMacroKeys and ns.QuickMacroKeys() or "clé")
+    else
+      local ok, why = ns.QuickSay(sub)
+      if not ok then Print("Envoi impossible : %s", tostring(why)) end
+    end
   elseif cmd == "social" or cmd == "anneau" then
     local sub = rest:lower()
     if sub == "on" or sub == "off" then

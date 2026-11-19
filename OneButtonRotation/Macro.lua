@@ -443,6 +443,9 @@ function ns.BuildAll(forcedSpec)
   local defs = {}
   for _, def in ipairs(phase.macros or {}) do table.insert(defs, def) end
   if ns.SocialMacroDef and ns.db.socialMacro ~= false then table.insert(defs, ns.SocialMacroDef) end
+  if ns.QuickMacros and ns.db.quickMacros ~= false then
+    for _, def in ipairs(ns.QuickMacros) do table.insert(defs, def) end
+  end
   for _, def in ipairs(defs) do
     local body, info = BuildOne(def, ctx)
     table.insert(list, { def = def, name = def.name, body = body, info = body and info or nil, reason = (not body) and info or nil })

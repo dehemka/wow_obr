@@ -80,25 +80,49 @@ local function ResolveChatType(key)
   return key
 end
 
+-- La cible est-elle un autre joueur (à qui on peut chuchoter) ?
+local function TargetPlayerName()
+  if not (UnitExists and UnitExists("target")) then return nil end
+  if type(UnitIsPlayer) == "function" and not UnitIsPlayer("target") then return nil end
+  if type(UnitIsUnit) == "function" and UnitIsUnit("target", "player") then return nil end
+  return UnitName("target")
+end
+
+-- Remplace %t par le nom de la cible, ou le retire proprement s'il n'y a pas de cible
+local function Substitute(text)
+  if not text:find("%%t") then return text end
+  local name = UnitExists and UnitExists("target") and UnitName("target") or nil
+  if name then return (text:gsub("%%t", name)) end
+  -- pas de cible : on retire le nom et l'espace qui le précède (« Merci %t ! » -> « Merci ! »)
+  return (text:gsub("%s*%%t", ""):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+-- entry : { emote=, text= | texts={...}, toTarget= } ; channelKey nil = canal courant de l'anneau
 function ns.SocialSend(entry, channelKey)
   if not entry then return false, "aucune phrase" end
   if entry.emote then pcall(DoEmote, entry.emote) end
-  if entry.text and entry.text ~= "" then
-    local chatType, target = ResolveChatType(channelKey or CurrentChannel().key)
+  local texts = entry.texts or (entry.text and entry.text ~= "" and { entry.text }) or {}
+  if #texts == 0 then return true end
+  local chatType, target
+  local whisperTo = entry.toTarget and TargetPlayerName()
+  if whisperTo then
+    chatType, target = "WHISPER", whisperTo
+  else
+    chatType, target = ResolveChatType(channelKey or CurrentChannel().key)
     if not chatType then return false, target end
-    local text = entry.text
-    if text:find("%%t") then
-      local name = UnitExists and UnitExists("target") and UnitName("target") or nil
-      if name then
-        text = text:gsub("%%t", name)
-      else -- pas de cible : on retire le nom et l'espace qui le précède (« Merci %t ! » -> « Merci ! »)
-        text = text:gsub("%s*%%t", ""):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
-      end
-    end
-    local ok, err = pcall(SendChatMessage, text, chatType, nil, target)
+  end
+  for _, raw in ipairs(texts) do
+    local ok, err = pcall(SendChatMessage, Substitute(raw), chatType, nil, target)
     if not ok then return false, tostring(err) end
   end
   return true
+end
+
+-- /obr say <clé> : phrase d'une macro rapide (OBR_OUI, OBR_NON…), canal courant de l'anneau
+function ns.QuickSay(key)
+  local m = ns.QuickMacroByKey and ns.QuickMacroByKey(key)
+  if not m then return false, string.format("phrase inconnue « %s » (%s)", tostring(key), ns.QuickMacroKeys and ns.QuickMacroKeys() or "?") end
+  return ns.SocialSend(m, nil)
 end
 
 -------------------------------------------------------------------------------

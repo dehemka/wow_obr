@@ -200,17 +200,28 @@ local function BuildSocialPage()
       "Décoche si la macro t'encombre : le raccourci suffit.",
       function(v) ns.db.socialMacro = v; ns.Refresh("option social", true) end),
     CheckBox(p, "Garder l'anneau ouvert après un envoi", "socialKeepOpen"),
+    CheckBox(p, "Créer les macros rapides OBR_GROUPE, OBR_OUI, OBR_NON, OBR_MERCI", "quickMacros",
+      "Un bouton = une phrase, sans ouvrir l'anneau : /invite + « Groupe ? / Group? », « Oui / Yes », "
+        .. "« Non / No », « Merci / Thank you » + « GL HF ». Elles utilisent le canal courant de l'anneau.",
+      function(v) ns.db.quickMacros = v; ns.Refresh("option macros rapides", true) end),
   }
   p.checks[1]:SetPoint("TOPLEFT", 0, -140)
   p.checks[2]:SetPoint("TOPLEFT", 0, -164)
+  p.checks[3]:SetPoint("TOPLEFT", 0, -188)
 
-  local slotLabel = Label(p, "Macro OBR_SOCIAL sur l'emplacement de barre :", "GameFontHighlight")
-  slotLabel:SetPoint("TOPLEFT", 4, -198)
-  local box = SlotBox(p, slotLabel, "actionSlotSocial", "")
-  p.slotBoxes = { box }
+  local slotLabel = Label(p, "Emplacements de barre :", "GameFontHighlight")
+  slotLabel:SetPoint("TOPLEFT", 4, -222)
+  p.slotBoxes = { SlotBox(p, slotLabel, "actionSlotSocial", "SOCIAL") }
+  local quickLabel = Label(p, "Macros rapides :", "GameFontHighlight")
+  quickLabel:SetPoint("TOPLEFT", 4, -246)
+  local prev = quickLabel
+  for _, m in ipairs(ns.QuickMacros or {}) do
+    prev = SlotBox(p, prev, m.slotKey, m.name:gsub("^OBR_", ""))
+    table.insert(p.slotBoxes, prev)
+  end
 
   local controls = ScrollText(p, "GameFontHighlight")
-  controls:SetPoint("TOPLEFT", 4, -226)
+  controls:SetPoint("TOPLEFT", 4, -274)
   controls:SetPoint("BOTTOMRIGHT", -26, 4)
   controls:SetContent(table.concat({
     "|cffffd100Manette (disposition Xbox)|r",
@@ -227,8 +238,15 @@ local function BuildSocialPage()
     "  Si l'écran d'assignation refuse la macro, l'addon peut la poser lui-même :",
     "  /obr pad   liste les boutons de la barre manette et leur contenu",
     "  /obr pad social <page> <barre> <bouton>   pose OBR_SOCIAL sur ce bouton",
+    "  /obr pad groupe|oui|non|merci <page> <barre> <bouton>   idem pour une macro rapide",
     "",
-    "Les phrases sont dans data/Social.lua (2 pages × 8, libres à modifier). %t = nom de la cible.",
+    "|cffffd100Macros rapides (un bouton = une phrase, FR / EN)|r",
+    "  OBR_GROUPE : /invite la cible + « Groupe ? / Group? » chuchoté (ou canal courant)",
+    "  OBR_OUI : « Oui / Yes »        OBR_NON : « Non / No »",
+    "  OBR_MERCI : « Merci / Thank you <cible> » puis « GL HF »",
+    "  Chacune joue l'emote et parle dans le canal choisi dans l'anneau (LB/RB). /obr say <clé> au clavier.",
+    "",
+    "Les phrases sont dans data/Social.lua (2 pages × 8 + macros rapides, libres à modifier). %t = nom de la cible.",
   }, "\n"))
 end
 
@@ -387,10 +405,17 @@ local function BuildOptionsPage()
   local b2 = SlotBox(p, b1, "actionSlotSustain", "VIE")
   local b3 = SlotBox(p, b2, "actionSlotSocial", "SOCIAL")
   p.slotBoxes = { b1, b2, b3 }
+  local quickLabel = Label(p, "Rapides", "GameFontHighlight")
+  quickLabel:SetPoint("TOPLEFT", 4, -194)
+  local prev = quickLabel
+  for _, m in ipairs(ns.QuickMacros or {}) do
+    prev = SlotBox(p, prev, m.slotKey, m.name:gsub("^OBR_", ""))
+    table.insert(p.slotBoxes, prev)
+  end
 
   local note = Label(p, "Ces emplacements sont ceux de la barre classique. Pour la barre manette de Forever, "
     .. "utilise /obr pad (page Aide).", "GameFontHighlightSmall")
-  note:SetPoint("TOPLEFT", 4, -196)
+  note:SetPoint("TOPLEFT", 4, -222)
   note:SetPoint("RIGHT", -4, 0)
   note:SetJustifyH("LEFT")
   note:SetHeight(40)
@@ -415,6 +440,7 @@ local function BuildHelpPage()
     "/obr bind              lie l'anneau à un bouton (appuie dessus ensuite)",
     "/obr pad               liste la barre manette ; /obr pad social 1 2 3 pose la macro",
     "/obr slot <n>, /obr slot vie <n>, /obr slot social <n>   pose les macros sur la barre",
+    "/obr say groupe|oui|non|merci   phrase rapide (macros OBR_GROUPE, OBR_OUI, OBR_NON, OBR_MERCI) ; on|off",
     "/obr spec affli|demono|destru|auto",
     "/obr rangs             rang connu de chaque sort (penser au maître de classe)",
     "/obr immo on|off       Immolation en 3e DoT (hors guide)",
