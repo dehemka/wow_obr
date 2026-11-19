@@ -73,13 +73,14 @@ ns.db.strict = true
 -- Cas 10 : création puis mise à jour des deux macros
 M.level = 15; M.known = K(SB, IMMO, CORR, TAP, AGONY, DRAIN, SHOOT); M.wand = true; M.talentPoints = {6, 0, 0}
 ns.BuildAndApply("test")
-expect(#M.macros == 7 and M.macros[1].name == "OBR" and M.macros[2].name == "OBR_VIE" and M.macros[3].name == "OBR_SOCIAL"
-  and M.macros[4].name == "OBR_GROUPE" and M.macros[5].name == "OBR_OUI" and M.macros[6].name == "OBR_NON" and M.macros[7].name == "OBR_MERCI", "sept macros créées")
+expect(#M.macros == 8 and M.macros[1].name == "OBR" and M.macros[2].name == "OBR_VIE" and M.macros[3].name == "OBR_SOCIAL"
+  and M.macros[4].name == "OBR_GROUPE" and M.macros[5].name == "OBR_OUI" and M.macros[6].name == "OBR_NON" and M.macros[7].name == "OBR_MERCI"
+  and M.macros[8].name == "OBR_DECK" and M.macros[8].body == "/obr say deck", "huit macros créées")
 expect(M.macros[4].body == "/invite\n/obr say groupe" and M.macros[5].body == "/obr say oui" and M.macros[7].body == "/obr say merci", "macros rapides : /invite puis /obr say <clé>")
 expect(M.macros[3].body == "/obr social" and M.macros[3].icon == "Interface\\Icons\\INV_Misc_GroupNeedMore", "OBR_SOCIAL = /obr social avec icône")
 M.level = 35; M.talentPoints = {26, 0, 0}
 ns.BuildAndApply("test2")
-expect(#M.macros == 7 and M.macros[1].body:find("nochanneling", 1, true) ~= nil, "macros mises à jour en place au changement de phase")
+expect(#M.macros == 8 and M.macros[1].body:find("nochanneling", 1, true) ~= nil, "macros mises à jour en place au changement de phase")
 local before = #M.chat
 ns.BuildAndApply("test3")
 expect(#M.chat == before, "inchangées : aucun message")
@@ -286,8 +287,11 @@ M.sent, M.emotes = {}, {}; M.target = "Copain"
 expect(ns.QuickSay("groupe") and M.sent[1].chatType == "WHISPER" and M.sent[1].target == "Copain" and M.sent[1].text == "Groupe ? / Group?" and M.emotes[1] == "BECKON", "say groupe : chuchoté à la cible joueur")
 M.sent = {}; M.target = nil
 expect(ns.QuickSay("groupe") and M.sent[1].chatType == "SAY", "say groupe sans cible : canal courant")
+M.sent, M.emotes = {}, {}
+expect(ns.QuickSay("deck") and #M.sent == 2 and M.sent[1].text:find("Steam Deck", 1, true) and M.sent[2].text:find("Steam Deck", 1, true)
+  and #M.sent[1].text <= 255 and #M.sent[2].text <= 255 and M.emotes[1] == "SHRUG", "say deck : FR puis EN, emote SHRUG")
 local okq, whyq = ns.QuickSay("zzz")
-expect(okq == false and whyq:find("phrase inconnue", 1, true) ~= nil and whyq:find("groupe|oui|non|merci", 1, true) ~= nil, "say inconnu : refusé avec la liste des clés")
+expect(okq == false and whyq:find("phrase inconnue", 1, true) ~= nil and whyq:find("groupe|oui|non|merci|deck", 1, true) ~= nil, "say inconnu : refusé avec la liste des clés")
 ns.db.quickMacros = false
 local names = {}
 for _, m in ipairs(assert(ns.BuildAll())) do names[m.name] = true end

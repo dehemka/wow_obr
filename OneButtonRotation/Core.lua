@@ -36,8 +36,8 @@ local DEFAULTS = {
   summonPet = false,     -- ajouter une ligne d'invocation du familier hors combat
   immolate = false,      -- Affliction 10-29 : ajouter Immolation en 3e DoT (hors guide Method)
   actionSlotSocial = nil, -- emplacement de barre de la macro OBR_SOCIAL
-  quickMacros = true,     -- créer les macros rapides OBR_GROUPE / OBR_OUI / OBR_NON / OBR_MERCI (/obr say <clé>)
-  actionSlotGroup = nil, actionSlotYes = nil, actionSlotNo = nil, actionSlotThanks = nil, -- leurs emplacements de barre
+  quickMacros = true,     -- créer les macros rapides OBR_GROUPE / OBR_OUI / OBR_NON / OBR_MERCI / OBR_DECK (/obr say <clé>)
+  actionSlotGroup = nil, actionSlotYes = nil, actionSlotNo = nil, actionSlotThanks = nil, actionSlotDeck = nil, -- leurs emplacements de barre
   socialMacro = true,    -- créer la macro OBR_SOCIAL (/obr social)
   socialChannel = "AUTO", -- dernier canal choisi dans l'anneau social
   socialKeepOpen = false, -- garder l'anneau ouvert après un envoi
@@ -333,7 +333,7 @@ local function Help()
   Print("  /obr slot <n>        pose la macro OBR sur l'emplacement de barre n (0 = désactiver)")
   Print("  /obr slot vie <n>    idem pour la macro de sustain OBR_VIE")
   Print("  /obr slot social <n> idem pour la macro OBR_SOCIAL ; /obr slot groupe|oui|non|merci <n> pour les macros rapides")
-  Print("  /obr say <clé>       envoie une phrase rapide (groupe = /invite + « Groupe ? / Group? », oui, non, merci = « Merci / Thank you » + « GL HF ») ; on|off = créer les 4 macros")
+  Print("  /obr say <clé>       envoie une phrase rapide (groupe = /invite + « Groupe ? / Group? », oui, non, merci = « Merci / Thank you » + « GL HF », deck = je joue sur Steam Deck) ; on|off = créer les 5 macros")
   Print("  /obr social          ouvre/ferme l'anneau social (phrases rapides + emotes) ; on|off = créer la macro ; keep = rester ouvert")
   Print("  /obr social scale <n> taille de l'anneau (0.5 à 2) ; /obr social reset le recentre")
   Print("  /obr auto on|off     mise à jour automatique au level up")
@@ -430,7 +430,7 @@ function ns.HandleSlash(msg)
     local sub = rest:lower()
     if sub == "on" or sub == "off" then
       ns.db.quickMacros = (sub == "on")
-      Print("Macros rapides (OBR_GROUPE, OBR_OUI, OBR_NON, OBR_MERCI) : %s", ns.db.quickMacros and "activées" or "désactivées")
+      Print("Macros rapides (OBR_GROUPE, OBR_OUI, OBR_NON, OBR_MERCI, OBR_DECK) : %s", ns.db.quickMacros and "activées" or "désactivées")
       ns.Refresh("option macros rapides")
     elseif sub == "" or not ns.QuickSay then
       Print("Usage : /obr say <%s> ; /obr say on|off crée ou non les macros rapides", ns.QuickMacroKeys and ns.QuickMacroKeys() or "clé")

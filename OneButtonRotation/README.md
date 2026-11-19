@@ -47,6 +47,8 @@ Trois macros de personnage sont créées :
   - **OBR_OUI** : « Oui / Yes » avec l'emote /oui.
   - **OBR_NON** : « Non / No » avec l'emote /non.
   - **OBR_MERCI** : « Merci / Thank you <cible> » puis « GL HF », avec l'emote /merci.
+  - **OBR_DECK** : « Je joue sur Steam Deck (manette) : difficile d'écrire, mais je fais au mieux ! »
+    puis la même phrase en anglais, avec l'emote /hausser (pour prévenir un groupe que tu réponds peu).
 
   Chacune contient `/obr say <clé>` : l'addon joue l'emote et parle dans le canal choisi dans
   l'anneau (Auto = raid, groupe, sinon dire). `/obr say off` ne les crée plus. Les textes sont
@@ -78,7 +80,7 @@ envoie un texte dans le canal choisi. `%t` dans un texte est remplacé par le no
 (« Impossible de sélectionner une action à associer à l'emplacement de manette »). L'addon peut la
 poser lui-même sur la barre manette : `/obr pad` liste les 3 pages × 4 barres × 8 boutons et leur
 contenu, puis `/obr pad social 1 2 3` pose OBR_SOCIAL sur la page 1, barre 2, bouton 3 (`obr`,
-`vie`, `groupe`, `oui`, `non` et `merci` marchent aussi). C'est exactement ce que fait l'écran de Blizzard (PlaceAction sur
+`vie`, `groupe`, `oui`, `non`, `merci` et `deck` marchent aussi). C'est exactement ce que fait l'écran de Blizzard (PlaceAction sur
 l'emplacement de stockage manette), sans passer par son interface.
 
 **Lier un bouton de la manette** : tape `/obr bind` (ou le bouton « Lier l'anneau à un bouton
@@ -144,8 +146,8 @@ Feu de l'âme gratuit (proc Decimation), Peur, Drain d'âme.
 | `/obr slot <n>`       | pose OBR sur l'emplacement de barre n (0 = désactiver)       |
 | `/obr slot vie <n>`   | idem pour OBR_VIE                                            |
 | `/obr slot social <n>` | idem pour OBR_SOCIAL                                        |
-| `/obr slot groupe\|oui\|non\|merci <n>` | idem pour les macros rapides                 |
-| `/obr say <clé>`      | envoie une phrase rapide (groupe, oui, non, merci) ; `on`/`off` crée ou non les 4 macros |
+| `/obr slot groupe\|oui\|non\|merci\|deck <n>` | idem pour les macros rapides                 |
+| `/obr say <clé>`      | envoie une phrase rapide (groupe, oui, non, merci, deck) ; `on`/`off` crée ou non les 5 macros |
 | `/obr social`         | ouvre / ferme l'anneau social ; `on`/`off` crée ou non la macro ; `keep` garde l'anneau ouvert après envoi ; `scale <n>` taille ; `reset` recentre |
 | `/obr auto on\|off`   | mise à jour automatique                                      |
 | `/obr strict on\|off` | `off` = inclure les sorts par niveau sans vérifier le grimoire |

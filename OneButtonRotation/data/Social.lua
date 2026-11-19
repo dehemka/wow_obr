@@ -68,6 +68,11 @@ ns.QuickMacros = {
   { key = "merci", name = "OBR_MERCI", slotKey = "actionSlotThanks", icon = "Interface\\Icons\\INV_Misc_Gift_01",
     emote = "THANK", texts = { "Merci / Thank you %t", "GL HF" },
     desc = "Remercie : « Merci / Thank you <cible> » puis « GL HF » sur deux lignes, avec l'emote /merci." },
+  { key = "deck", name = "OBR_DECK", slotKey = "actionSlotDeck", icon = "Interface\\Icons\\INV_Gizmo_02",
+    emote = "SHRUG",
+    texts = { "Je joue sur Steam Deck (manette) : difficile d'écrire, mais je fais au mieux !",
+              "On Steam Deck (controller): hard to type, but I'll do my best!" },
+    desc = "Prévient que tu joues à la manette sur Steam Deck et que tu réponds peu : une ligne en français, une en anglais." },
 }
 for _, m in ipairs(ns.QuickMacros) do
   m.noTooltip = true
