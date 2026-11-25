@@ -1,7 +1,11 @@
 -- OneButtonRotation - Onglet « Bonnes affaires » dans l'hôtel des ventes
 -- Se greffe sur la fenêtre Blizzard (Blizzard_AuctionHouseUI, chargée à la demande) comme un
--- onglet supplémentaire, à la manière d'Auctionator : un mode d'affichage de plus dans
--- AuctionHouseFrameDisplayMode, un bouton d'onglet du même gabarit que ceux de Blizzard.
+-- onglet supplémentaire, à la manière de LibAHTab (Auctionator, VendorFloor) : on ne touche à
+-- aucune table de Blizzard (Tabs, AuctionHouseFrameDisplayMode…), ce qui « tainterait » la
+-- fenêtre et ferait bloquer la fermeture de l'hôtel des ventes. Le bouton d'onglet est le
+-- nôtre, posé à droite des onglets Blizzard ; à la sélection on vide l'affichage Blizzard
+-- (SetDisplayMode({})), on déselectionne ses onglets et on montre notre cadre ; un
+-- hooksecurefunc sur SetDisplayMode cache notre cadre quand un onglet Blizzard est choisi.
 -- Toute la logique est dans Auction.lua (ns.Auction) ; ici, uniquement l'affichage.
 
 local ADDON_NAME, ns = ...
@@ -38,7 +42,8 @@ end
 
 local function StatusText(row)
   if row.status == "bought" then return "|cff40ff40Acheté|r" end
-  if row.status == "pending" then return "|cffffd100Achat…|r" end
+  if row.status == "pending" or row.status == "quoting" or row.status == "confirming" then return "|cffffd100Achat…|r" end
+  if row.status == "quote" then return "|cffff8000Clic : confirmer le devis|r" end
   if row.status == "failed" then return "|cffff4040" .. (row.error or "échec") .. "|r" end
   return "|cff80c0ffAcheter|r"
 end
@@ -88,8 +93,13 @@ local function RefreshButtons()
   end
   frame.scanBtn.tooltip = ok and "Scan complet : toutes les enchères, une fois toutes les 15 minutes." or why
   local nextRow = AH.NextRow()
-  frame.nextBtn:SetEnabled(nextRow ~= nil and AH.state.open and not AH.state.pendingRow)
-  frame.nextBtn:SetText(nextRow and ("Acheter le suivant (+" .. AH.MoneyString(nextRow.profit) .. ")") or "Acheter le suivant")
+  local busy = next(AH.state.pending) ~= nil
+  frame.nextBtn:SetEnabled(nextRow ~= nil and AH.state.open and (nextRow.status == "quote" or not busy))
+  frame.nextBtn:SetText(nextRow and nextRow.status == "quote" and "Confirmer le devis"
+    or nextRow and ("Acheter le suivant (+" .. AH.MoneyString(nextRow.profit) .. ")") or "Acheter le suivant")
+  local anyItem = false
+  for _, row in ipairs(AH.state.rows) do if row.status == "ready" then anyItem = true break end end
+  frame.allBtn:SetEnabled(anyItem and AH.state.open)
   frame.status:SetText(AH.StatusText())
 end
 
@@ -202,8 +212,22 @@ local function Build(ahf)
   end)
   frame.nextBtn:SetPoint("LEFT", frame.scanBtn, "RIGHT", 8, 0)
 
-  frame.reportBtn = Button(frame, "Rapport (chat)", 120, 24, function() AH.Report() end)
-  frame.reportBtn:SetPoint("LEFT", frame.nextBtn, "RIGHT", 8, 0)
+  frame.allBtn = Button(frame, "Tout acheter (essai)", 150, 24, function()
+    local _, msg = AH.BuyAll()
+    if msg then AH.Print("%s", msg) end
+    ns.AuctionUIRefresh()
+  end)
+  frame.allBtn:SetPoint("LEFT", frame.nextBtn, "RIGHT", 8, 0)
+  frame.allBtn:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Envoie d'un seul clic l'achat de toutes les enchères uniques de la liste. Le jeu peut n'en accepter qu'une : "
+      .. "celles sans réponse passent en échec et restent achetables avec « Acheter le suivant ». Les empilables se font un par clic.", 1, 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  frame.allBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+  frame.reportBtn = Button(frame, "Rapport", 90, 24, function() AH.Report() end)
+  frame.reportBtn:SetPoint("LEFT", frame.allBtn, "RIGHT", 8, 0)
 
   frame.status = Label(frame, "", "GameFontHighlightSmall")
   frame.status:SetPoint("TOPLEFT", frame.scanBtn, "BOTTOMLEFT", 2, -4)
@@ -244,9 +268,9 @@ local function Build(ahf)
   local down = Button(frame, "▼", 24, 20, function() offset = offset + ROWS; RefreshRows() end)
   down:SetPoint("RIGHT", up, "LEFT", -2, 0)
 
-  local hint = Label(frame, "Un clic sur une ligne achète (le jeu exige un clic ou une touche par achat : pas d'achat automatique). "
+  local hint = Label(frame, "Un clic sur une ligne achète (le jeu exige un clic ou une touche par achat). "
     .. "« Acheter le suivant » prend la meilleure affaire restante ; lie-le à un bouton dans Options > Raccourcis > AddOns. "
-    .. "Gain minimal : /obr ah profit <cuivre>.", "GameFontDisableSmall")
+    .. "Un devis d'empilable non confirmé automatiquement demande un second clic. Gain minimal : /obr ah profit <cuivre>.", "GameFontDisableSmall")
   hint:SetPoint("BOTTOMLEFT", 10, 4)
   hint:SetPoint("RIGHT", down, "LEFT", -10, 0)
   hint:SetJustifyH("LEFT")
@@ -261,27 +285,45 @@ local function Build(ahf)
   frame:SetScript("OnShow", function() offset = 0; ns.AuctionUIRefresh() end)
 end
 
--- Appelé quand Blizzard_AuctionHouseUI est chargé (ADDON_LOADED) ou au login s'il l'est déjà
+-- Sélection de notre onglet : vider l'affichage Blizzard, montrer notre cadre
+local function SelectOurTab()
+  local ahf = _G.AuctionHouseFrame
+  if not ahf or not frame then return end
+  ahf:SetDisplayMode({})
+  ahf.displayMode = nil
+  for _, t in ipairs(ahf.Tabs or {}) do PanelTemplates_DeselectTab(t) end
+  PanelTemplates_SelectTab(tab)
+  if ahf.SetTitle then ahf:SetTitle("Hôtel des ventes – Bonnes affaires") end
+  frame:Show()
+end
+
+-- Appelé quand Blizzard_AuctionHouseUI est chargé (ADDON_LOADED) ou à l'ouverture de l'hôtel des ventes
 function ns.AuctionSetupTab()
   local ahf = _G.AuctionHouseFrame
-  if not ahf or tab or not ahf.Tabs or not ahf.tabsForDisplayMode or not _G.AuctionHouseFrameDisplayMode then return false end
+  if tab or not ahf or not ahf.Tabs or #ahf.Tabs == 0 then return false end
   Build(ahf)
-  ahf.OBRDealsFrame = frame
-  local mode = { "OBRDealsFrame" }
-  AuctionHouseFrameDisplayMode.OBRDeals = mode
 
-  tab = CreateFrame("Button", "OBRAuctionDealsTab", ahf, "AuctionHouseFrameDisplayModeTabTemplate")
+  -- Racine à droite du dernier onglet Blizzard : notre bouton n'entre dans aucune table de Blizzard
+  local root = CreateFrame("Frame", nil, ahf)
+  root:SetSize(10, 10)
+  root:SetPoint("TOPLEFT", ahf.Tabs[#ahf.Tabs], "TOPRIGHT")
+  tab = CreateFrame("Button", "OBRAuctionDealsTab", root, "AuctionHouseFrameDisplayModeTabTemplate")
   tab:SetText("Bonnes affaires")
-  tab.displayMode = mode
-  tab:SetPoint("LEFT", ahf.Tabs[#ahf.Tabs], "RIGHT", -15, 0)
-  table.insert(ahf.Tabs, tab)
-  ahf.tabsForDisplayMode[mode] = #ahf.Tabs
-  if PanelTemplates_SetNumTabs then PanelTemplates_SetNumTabs(ahf, #ahf.Tabs) end
-  if PanelTemplates_UpdateTabs then PanelTemplates_UpdateTabs(ahf) end
+  if PanelTemplates_TabResize then PanelTemplates_TabResize(tab, 20, nil, 70) end
+  tab:SetPoint("TOPLEFT", root, "TOPLEFT", 3, 0)
+  if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(tab) end
+  tab:SetScript("OnClick", function()
+    SelectOurTab()
+    if PlaySound and SOUNDKIT then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB) end
+  end)
 
-  if hooksecurefunc and ahf.UpdateTitle then
-    hooksecurefunc(ahf, "UpdateTitle", function(self)
-      if self.displayMode == mode and self.SetTitle then self:SetTitle("Hôtel des ventes – Bonnes affaires") end
+  -- Un onglet Blizzard choisi : notre cadre se cache et notre onglet se désélectionne
+  if hooksecurefunc then
+    hooksecurefunc(ahf, "SetDisplayMode", function(_, mode)
+      if mode ~= nil and #mode > 0 then
+        frame:Hide()
+        PanelTemplates_DeselectTab(tab)
+      end
     end)
   end
   return true

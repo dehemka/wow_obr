@@ -123,7 +123,17 @@ revente chez un vendeur** et permet de les acheter pour les revendre au PNJ.
   seulement s'il reste rentable.
 - **Acheter le suivant** : achète la meilleure affaire restante. Un raccourci « Hôtel des ventes :
   acheter la prochaine bonne affaire » (Options > Raccourcis > AddOns) permet de le marteler à la
-  manette. Chaque résultat (acheté, déjà parti, prix monté, pas assez d'argent…) est noté.
+  manette. Chaque résultat (acheté, déjà parti, prix monté, pas assez d'argent…) est noté. Si la
+  confirmation automatique d'un devis d'empilable est ignorée par le jeu, la ligne passe en
+  « Clic : confirmer le devis » et le clic suivant confirme.
+- **Tout acheter (essai)** : envoie d'un seul clic l'achat de toutes les enchères uniques de la
+  liste. Si le jeu n'en accepte qu'une par clic, les autres échouent sur « pas de confirmation » et
+  restent achetables avec « Acheter le suivant ».
+- L'onglet est greffé comme le font Auctionator et VendorFloor (LibAHTab) : aucune table de la
+  fenêtre Blizzard n'est modifiée, sinon la fermeture de l'hôtel des ventes est bloquée (« action
+  non utilisable par l'IU de Blizzard »). Le scan suit aussi ce que VendorFloor a constaté en jeu :
+  indices de la liste complète à partir de 0, liste reçue par morceaux, requêtes jetées quand la
+  ligne est occupée (renvoyées), quantités plafonnées à la taille de pile.
 - **Rapport (chat)** : nombre d'achats, dépense, revente vendeur attendue, gain, échecs et causes.
 - `/obr ah profit <cuivre>` fixe le gain minimal par affaire (0 par défaut) ; `/obr ah` donne l'état,
   `/obr ah scan`, `/obr ah next`, `/obr ah rapport` font la même chose que les boutons.

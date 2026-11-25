@@ -297,8 +297,10 @@ local names = {}
 for _, m in ipairs(assert(ns.BuildAll())) do names[m.name] = true end
 expect(names.OBR_SOCIAL and not names.OBR_OUI, "quickMacros off : plus de macros rapides, OBR_SOCIAL reste")
 ns.db.quickMacros = true
--- Cas 22 : hôtel des ventes, bonnes affaires (scan complet, prix vendeur, recherches, achats, rapport)
+-- Cas 22 : hôtel des ventes, bonnes affaires (scan complet cadencé, prix vendeur, recherches, achats, rapport)
 local AH = ns.Auction
+local function calls(kind) local t = {} for _, c in ipairs(M.ah.calls) do if c[1] == kind then table.insert(t, c) end end return t end
+local function tick(dt) M.now = M.now + (dt or 0.1); AH.Tick(M.now) end
 expect(AH.MoneyString(123456) == "12po 34pa 56pc" and AH.MoneyString(5) == "5pc" and AH.MoneyString(10000) == "1po 0pa 0pc", "MoneyString")
 expect(AH.ClockString(754) == "12:34" and AH.SuffixFromLink("|Hitem:12345:0:0:0:0:0:-12:777|h") == -12 and AH.SuffixFromLink(nil) == 0, "ClockString / suffixe de lien")
 expect(AH.ErrorText(4) == "enchère déjà partie" and AH.ErrorText(99):find("erreur", 1, true), "ErrorText")
@@ -307,93 +309,130 @@ local okS, whyS = AH.CanScan()
 expect(okS == false and whyS:find("ouvre d'abord", 1, true), "scan refusé si l'HV est fermé")
 AH.OnEvent("AUCTION_HOUSE_SHOW")
 expect(AH.CanScan() == true and AH.ScanRemaining() == 0, "HV ouvert, pas de verrou : scan possible")
--- Enchères : 1001 = objet unique rentable (2 enchères, une des deux à moi), 1002 = empilable rentable, 1003 = trop cher, 1004 = prix vendeur à charger, 1005 = sans prix vendeur
-M.sellPrice = { [1001] = 1000, [1002] = 10, [1003] = 50, [1004] = 500, [1005] = 0 }
+-- 1001 = épée (suffixe -5) : 2 enchères, une à moi ; 1002 = empilable (pile 20) ; 1003 = trop cher ; 1004 = pas en cache ;
+-- 1005 = sans prix vendeur ; 1006 = sac « ×830 » (pile 1) ; une enchère sans rachat
+M.sellPrice = { [1001] = 1000, [1002] = 10, [1003] = 50, [1004] = 500, [1005] = 0, [1006] = 300 }
+M.stack = { [1002] = 20, [1004] = 5, [1006] = 1 }; M.equip = { [1001] = "INVTYPE_WEAPON", [1006] = "INVTYPE_BAG" }
 M.itemLoad = { [1004] = true }
+local sword = "|Hitem:1001:0:0:0:0:0:-5:1|h[Épée]|h"
 M.ah.replicate = {
-  { itemID = 1001, count = 1, buyout = 600, owner = "Autre", link = "|Hitem:1001:0:0:0:0:0:-5:1|h[Épée]|h" },
-  { itemID = 1001, count = 1, buyout = 300, owner = "Testeur", link = "|Hitem:1001:0:0:0:0:0:-5:1|h[Épée]|h" }, -- la mienne : ignorée
+  { itemID = 1001, count = 1, buyout = 600, owner = "Autre", link = sword },
+  { itemID = 1001, count = 1, buyout = 300, owner = "Testeur", link = sword }, -- la mienne : ignorée
   { itemID = 1002, count = 20, buyout = 100, owner = "Autre" }, -- 5 pc l'unité, vendeur 10
   { itemID = 1003, count = 1, buyout = 80, owner = "Autre" },
-  { itemID = 1004, count = 2, buyout = 400, owner = "Autre" },
+  { itemID = 1004, count = 2, buyout = 400, owner = "Autre", hasAll = false },
   { itemID = 1005, count = 1, buyout = 1, owner = "Autre" },
-  { itemID = 1001, count = 1, buyout = 0, owner = "Autre" }, -- enchère sans rachat : ignorée
+  { itemID = 1006, count = 830, buyout = 1000, owner = "Autre", link = "|Hitem:1006:0:0:0:0:0:0:1|h[Sac]|h" }, -- 1 unité réelle : 1000 > 300, pas une affaire
 }
 M.ah.items[1001] = { { auctionID = 501, buyout = 600, qty = 1 }, { auctionID = 502, buyout = 950, qty = 1 }, { auctionID = 503, buyout = 1200, qty = 1 }, { auctionID = 504, buyout = 100, qty = 1, owner = true } }
 M.ah.items[1004] = { { auctionID = 601, buyout = 400, qty = 2 } }
 M.ah.commodities[1002] = { { unit = 5, qty = 20 }, { unit = 8, qty = 5 }, { unit = 12, qty = 100 } }
-M.ah.calls = {}
+M.ah.calls = {}; M.ah.ready = false
 AH.CHUNK = 3
-local okStart, msgStart = AH.StartScan()
-expect(okStart and AH.state.phase == "replicate" and M.ah.calls[1][1] == "replicate" and ns.db.ahLastScan ~= nil, "StartScan : ReplicateItems appelé, verrou posé")
-local okS2, whyS2 = AH.CanScan()
-expect(okS2 == false and whyS2 == "scan en cours", "pas de second scan pendant le scan")
+local okStart = AH.StartScan()
+expect(okStart and AH.state.phase == "sending" and #calls("replicate") == 0 and ns.db.ahLastScan == nil, "StartScan, ligne occupée : on attend avant d'envoyer")
+expect(select(2, AH.CanScan()) == "scan en cours", "pas de second scan pendant le scan")
+tick(1); M.ah.ready = true; tick(0.1)
+expect(AH.state.phase == "waiting" and #calls("replicate") == 1 and ns.db.ahLastScan ~= nil, "ligne libre : ReplicateItems envoyé, verrou posé")
+AH.OnEvent("AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED"); tick(0.1)
+expect(AH.state.phase == "waiting" and #calls("replicate") == 2 and AH.state.sends == 2, "requête jetée : renvoyée")
+table.insert(M.ah.replicate, { itemID = 1001, count = 1, buyout = 0, owner = "Autre", link = sword }) -- arrive avec la liste, sans rachat : ignorée
 AH.OnEvent("REPLICATE_ITEM_LIST_UPDATE")
-expect(AH.state.phase == "process" and AH.state.index == 3, "dépouillement par paquets : 3 lues sur 7")
-while AH.state.phase == "process" do AH.ProcessChunk() end
-expect(AH.state.phase == "prices" and AH.state.pendingCount == 1 and AH.state.stats.scanned == 7 and AH.state.stats.keys == 5, "7 enchères, 5 clés (dont suffixe -5), 1 prix vendeur à charger")
-M.itemLoad[1004] = nil -- le jeu a mis l'objet en cache
-AH.OnEvent("ITEM_DATA_LOAD_RESULT", 1004, true)
-expect(AH.state.phase == "search" and AH.state.stats.candidates == 3, "prix chargé → 3 candidats (1001, 1002, 1004 ; 1003 trop cher, 1005 sans prix vendeur)")
-expect(AH.state.current.itemID == 1001 and M.ah.calls[#M.ah.calls][1] == "search" and M.ah.calls[#M.ah.calls][2] == 1001 and M.ah.calls[#M.ah.calls][3] == -5,
-  "candidat le plus prometteur d'abord : 1001 (1000 - 600 = 400 par unité), recherché avec son suffixe -5")
-AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1001 })
-expect(AH.state.current.itemID == 1004, "puis 1004 (500 - 200 = 300)")
-AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1004 })
+expect(AH.state.phase == "arriving" and AH.state.count == 8, "liste annoncée : 8 enchères")
+tick(1); expect(AH.state.phase == "arriving", "liste stable depuis 1 s : on attend encore")
+tick(1.2); expect(AH.state.phase == "reading" and AH.state.index == 0, "stable depuis 2 s : dépouillement")
+tick(); expect(AH.state.phase == "reading" and AH.state.index == 3, "3 enchères lues par tick (indices 0, 1, 2)")
+tick(); tick()
+expect(AH.state.phase == "loading" and #AH.state.pendingIdx == 1 and #calls("load") == 1 and calls("load")[1][2] == 1004, "8 lues : 1 objet pas en cache, chargement demandé une fois")
+expect(AH.state.stats.keys == 4, "4 clés : épée (suffixe), empilable, 1003, sac (1005 sans prix vendeur écarté)")
+tick(); expect(AH.state.phase == "loading", "objet toujours pas chargé : on attend")
+M.ah.replicate[5].hasAll = true; M.itemLoad[1004] = nil
+tick()
+expect(AH.state.phase == "searching" and AH.state.stats.candidates == 3 and AH.state.stats.scanned == 7, "objet chargé → 3 candidats (épée, 1004, empilable), 7 enchères comptées")
+expect(AH.state.current.itemID == 1001 and #calls("search") == 0, "candidat le plus prometteur d'abord (épée : 1000 - 600) ; la requête part au tick suivant")
+M.ah.ready = false; tick(); expect(#calls("search") == 0, "ligne occupée : recherche en attente")
+M.ah.ready = true; tick()
+local sc = calls("search")
+expect(#sc == 1 and sc[1][2] == 1001 and sc[1][3] == -5 and sc[1][4] == 10, "recherche de l'épée avec suffixe -5 et niveau d'objet 10")
+AH.OnEvent("AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED"); tick()
+expect(#calls("search") == 2 and AH.state.current.itemID == 1001, "recherche jetée : renvoyée")
+AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1001 }); tick()
+expect(AH.state.current.itemID == 1004 and #calls("search") == 3, "puis 1004 (500 - 200 = 300)")
+AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1004 }); tick()
 expect(AH.state.current.itemID == 1002, "puis l'empilable 1002")
-AH.OnEvent("COMMODITY_SEARCH_RESULTS_UPDATED", 1002)
-expect(AH.state.phase == "done" and #AH.state.rows == 4, "scan terminé : 4 affaires (1004 ×2, 1001 à 600 et 950, 1002 ×25)")
-local r1, r2, r3, r4 = AH.state.rows[1], AH.state.rows[2], AH.state.rows[3], AH.state.rows[4]
-expect(r1.itemID == 1004 and r1.profit == 600 and r2.itemID == 1001 and r2.auctionID == 501 and r2.profit == 400, "tri par gain : 1004 (+600) puis 1001 à 600 (+400)")
-expect(r3.kind == "commodity" and r3.qty == 25 and r3.price == 140 and r3.profit == 110 and r3.maxTotal == 249, "empilable : 20 à 5 + 5 à 8 = 25 pour 140, gain 110, plafond 249")
-expect(r4.auctionID == 502 and r4.profit == 50, "1001 à 950 : +50 ; 1200 et ma propre enchère écartées")
-expect(AH.CanScan() == false and AH.ScanRemaining() > 800, "verrou de 15 min actif après le scan")
-expect(AH.ScanRemaining(ns.db.ahLastScan + 900) == 0 and AH.ScanRemaining(ns.db.ahLastScan + 899) == 1, "verrou levé à 900 s")
--- Achats
+tick(16) -- pas de réponse : abandon de la recherche
+expect(AH.state.phase == "done" and AH.state.stats.unresolved == 1 and #AH.state.rows == 3, "recherche sans réponse abandonnée : scan terminé, 3 affaires")
+local r1, r2, r3 = AH.state.rows[1], AH.state.rows[2], AH.state.rows[3]
+expect(r1.itemID == 1004 and r1.profit == 600 and r2.auctionID == 501 and r2.profit == 400 and r3.auctionID == 502 and r3.profit == 50, "tri par gain : 1004 (+600), épée à 600 (+400), épée à 950 (+50) ; 1200 et la mienne écartées")
+expect(AH.CanScan() == false and AH.ScanRemaining() > 800 and AH.ScanRemaining(ns.db.ahLastScan + 900) == 0, "verrou de 15 min actif, levé à 900 s")
+-- Achats un par un
 M.ah.calls = {}
-local okB, msgB = AH.BuyNext()
-expect(okB and r1.status == "pending" and M.ah.calls[1][1] == "bid" and M.ah.calls[1][2] == 601 and M.ah.calls[1][3] == 400, "BuyNext : PlaceBid(601, 400) sur la meilleure affaire")
+local okB = AH.BuyNext()
+expect(okB and r1.status == "pending" and calls("bid")[1][2] == 601 and calls("bid")[1][3] == 400, "BuyNext : PlaceBid(601, 400) sur la meilleure affaire")
 local okB2, whyB2 = AH.BuyNext()
 expect(okB2 == false and whyB2:find("déjà en cours", 1, true), "pas de second achat pendant l'attente")
-AH.OnEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 999)
-expect(r1.status == "pending", "autre enchère achevée : ignorée")
+AH.OnEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 999); expect(r1.status == "pending", "autre enchère achevée : ignorée")
 AH.OnEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 601)
 expect(r1.status == "bought" and AH.state.report.bought == 1 and AH.state.report.spent == 400 and AH.state.report.gain == 600, "achat 601 confirmé : rapport 1 achat, 400 dépensés, gain 600")
-AH.BuyNext()
-AH.OnEvent("AUCTION_HOUSE_SHOW_ERROR", 4)
-expect(r2.status == "failed" and r2.error == "enchère déjà partie" and AH.state.report.failed == 1, "erreur ItemNotFound : ligne en échec, rapport mis à jour")
+AH.BuyNext(); AH.OnEvent("AUCTION_HOUSE_SHOW_ERROR", 4)
+expect(r2.status == "failed" and r2.error == "enchère déjà partie" and AH.state.report.failed == 1, "erreur ItemNotFound : ligne en échec")
+AH.BuyNext(); tick(8.5)
+expect(r3.status == "failed" and r3.error:find("pas de confirmation", 1, true) and AH.state.report.failed == 2, "achat sans réponse : échec après 8 s")
+-- Tout acheter : deux enchères uniques d'un même clic
+AH.state.rows = {
+  { kind = "item", itemID = 1001, name = "Épée", auctionID = 11, qty = 1, price = 100, sellPrice = 1000, profit = 900, status = "ready" },
+  { kind = "item", itemID = 1001, name = "Épée", auctionID = 12, qty = 1, price = 200, sellPrice = 1000, profit = 800, status = "ready" },
+  { kind = "commodity", itemID = 1002, name = "Tissu", qty = 25, price = 140, maxTotal = 249, sellPrice = 10, profit = 110, status = "ready" },
+}
 M.ah.calls = {}
-AH.BuyNext()
-expect(r3.status == "pending" and M.ah.calls[1][1] == "startc" and M.ah.calls[1][2] == 1002 and M.ah.calls[1][3] == 25, "empilable : StartCommoditiesPurchase(1002, 25)")
+local okA, msgA = AH.BuyAll()
+expect(okA and #calls("bid") == 2 and AH.state.rows[1].status == "pending" and AH.state.rows[2].status == "pending" and AH.state.rows[3].status == "ready", "Tout acheter : 2 PlaceBid d'un coup, l'empilable attend")
+AH.OnEvent("AUCTION_HOUSE_SHOW_ERROR", 10)
+expect(AH.state.rows[1].status == "pending" and AH.state.rows[1].errorSeen, "erreur avec 2 achats en vol : non attribuée, mémorisée")
+AH.OnEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 11)
+expect(AH.state.rows[1].status == "bought", "achat 11 confirmé")
+tick(8.5)
+expect(AH.state.rows[2].status == "failed" and AH.state.rows[2].error:find("erreur interne", 1, true), "achat 12 sans confirmation : échec avec l'erreur vue")
+-- Empilable : devis, confirmation automatique ignorée, puis confirmation au clic
+M.ah.calls = {}
+local okC = AH.BuyNext()
+local rc = AH.state.rows[3]
+expect(okC and rc.status == "quoting" and calls("startc")[1][2] == 1002 and calls("startc")[1][3] == 25, "empilable : StartCommoditiesPurchase(1002, 25)")
 AH.OnEvent("COMMODITY_PRICE_UPDATED", 6, 150)
-expect(M.ah.calls[2][1] == "confirmc" and r3.paid == 150 and r3.status == "pending", "devis 150 ≤ plafond 249 : confirmation")
+expect(rc.status == "confirming" and rc.paid == 150 and #calls("confirmc") == 1, "devis 150 ≤ plafond 249 : confirmation automatique tentée")
+tick(0.5); expect(rc.status == "confirming", "on laisse 1,5 s à la confirmation automatique")
+tick(1.2); expect(rc.status == "quote" and AH.NextRow() == rc, "pas de réponse : le devis attend un clic")
+local okQ, msgQ = AH.BuyNext()
+expect(okQ and rc.status == "confirming" and #calls("confirmc") == 2 and msgQ:find("confirmation", 1, true), "clic : ConfirmCommoditiesPurchase renvoyé")
 AH.OnEvent("COMMODITY_PURCHASE_SUCCEEDED")
-expect(r3.status == "bought" and AH.state.report.spent == 550 and AH.state.report.gain == 600 + (250 - 150), "empilable acheté : dépense 550, gain 700")
-M.ah.money = 10
-local okB4, whyB4 = AH.BuyNext()
-expect(okB4 == false and r4.status == "failed" and r4.error:find("pas assez d'argent", 1, true), "sans argent : échec immédiat")
-M.ah.money = 10000000
-local okB5, whyB5 = AH.BuyNext()
-expect(okB5 == false and whyB5:find("plus rien à acheter", 1, true), "plus d'affaire : message de fin")
-local lines = AH.ReportLines()
-expect(#lines >= 5 and lines[1]:find("7 enchères", 1, true) and lines[2]:find("2 achat(s) pour 5pa 50pc", 1, true) and lines[2]:find("2 échec(s)", 1, true), "rapport : scan + bilan + lignes")
--- devis trop cher sur un empilable : annulation
+expect(rc.status == "bought" and AH.state.report.spent == 400 + 100 + 150, "empilable acheté : dépense cumulée 650")
+-- devis trop cher : annulation ; sans argent : échec immédiat
 AH.state.rows = { { kind = "commodity", itemID = 1002, name = "Tissu", qty = 10, price = 50, maxTotal = 99, sellPrice = 10, profit = 50, status = "ready" } }
-AH.state.pendingRow = nil; M.ah.calls = {}
-AH.BuyNext()
-AH.OnEvent("COMMODITY_PRICE_UPDATED", 20, 200)
-expect(M.ah.calls[2][1] == "cancelc" and AH.state.rows[1].status == "failed" and AH.state.rows[1].error:find("monté", 1, true), "devis 200 > plafond 99 : annulation")
+M.ah.calls = {}; AH.BuyNext(); AH.OnEvent("COMMODITY_PRICE_UPDATED", 20, 200)
+expect(#calls("cancelc") == 1 and AH.state.rows[1].status == "failed" and AH.state.rows[1].error:find("monté", 1, true), "devis 200 > plafond 99 : annulation")
+AH.state.rows = { { kind = "item", itemID = 1001, name = "Épée", auctionID = 7, qty = 1, price = 5000, sellPrice = 10000, profit = 5000, status = "ready" } }
+M.ah.money = 10
+local okM, whyM = AH.BuyNext()
+expect(okM == false and AH.state.rows[1].status == "failed" and whyM == "pas assez d'argent", "sans argent : échec immédiat")
+M.ah.money = 10000000
+expect(AH.BuyNext() == false and select(2, AH.BuyNext()):find("plus rien", 1, true), "plus d'affaire : message de fin")
+local lines = AH.ReportLines()
+expect(#lines >= 4 and lines[1]:find("7 enchères", 1, true) and lines[1]:find("1 recherche(s) sans réponse", 1, true) and lines[2]:find("achat(s) pour", 1, true), "rapport : scan + bilan")
 -- fermeture de l'HV pendant un achat
-AH.state.rows = { { kind = "item", itemID = 1001, name = "Épée", auctionID = 7, qty = 1, price = 5, sellPrice = 10, profit = 5, status = "ready" } }
-AH.BuyNext()
-AH.OnEvent("AUCTION_HOUSE_CLOSED")
+AH.state.rows = { { kind = "item", itemID = 1001, name = "Épée", auctionID = 8, qty = 1, price = 5, sellPrice = 10, profit = 5, status = "ready" } }
+AH.BuyNext(); AH.OnEvent("AUCTION_HOUSE_CLOSED")
 expect(AH.state.open == false and AH.state.rows[1].status == "failed" and AH.BuyNext() == false, "HV fermé : achat en attente échoué, plus d'achat possible")
+-- liste d'un autre addon pendant qu'on ne fait rien : lue telle quelle
+AH.OnEvent("AUCTION_HOUSE_SHOW"); AH.state.phase = "idle"; ns.db.ahLastScan = nil; M.ah.calls = {}
+AH.OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+expect(AH.state.phase == "arriving" and ns.db.ahLastScan ~= nil and #calls("replicate") == 0, "scan d'un autre addon : on lit sa liste sans redemander")
+AH.OnEvent("AUCTION_HOUSE_CLOSED")
 -- /obr ah
 M.chat = {}
 AH.HandleCommand("profit 250")
 expect(ns.db.ahMinProfit == 250 and M.chat[1]:find("2pa 50pc", 1, true), "/obr ah profit 250")
 AH.HandleCommand("")
-expect(M.chat[2]:find("achat(s) pour", 1, true) ~= nil and M.chat[3]:find("Usage", 1, true) ~= nil, "/obr ah : état (bilan du dernier scan) + usage")
-AH.CHUNK = 800; ns.db.ahMinProfit = 0; ns.db.ahLastScan = nil
+expect(M.chat[2]:find("achat(s) pour", 1, true) ~= nil and M.chat[3]:find("Usage", 1, true) ~= nil, "/obr ah : état + usage")
+AH.CHUNK = 400; ns.db.ahMinProfit = 0; ns.db.ahLastScan = nil
 ns.DebugInfo()
 if _G.FAILED then os.exit(1) end

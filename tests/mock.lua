@@ -109,31 +109,40 @@ function UnitExists(u) return u == "target" and M.target ~= nil end
 local _UnitName = UnitName
 function UnitName(u) if u == "target" then return M.target end return _UnitName(u) end
 function ChatEdit_GetLastTellTarget() return M.lastTell end
--- Hôtel des ventes factice (API C_AuctionHouse de Forever)
--- M.ah.replicate = { {itemID=, count=, buyout=, owner=, link=}, ... } ; M.ah.items[itemID] = { {auctionID=, buyout=, qty=, owner=}, ... }
+-- Hôtel des ventes factice (API C_AuctionHouse de Forever, indices de la liste complète 0-based)
+-- M.ah.replicate = { {itemID=, count=, buyout=, owner=, link=, hasAll=}, ... } ; M.ah.items[itemID] = { {auctionID=, buyout=, qty=, owner=}, ... }
 -- M.ah.commodities[itemID] = { {unit=, qty=}, ... } ; M.sellPrice[itemID] = prix vendeur unitaire ; M.itemLoad[itemID] = true si pas encore en cache
-M.ah = { replicate = {}, items = {}, commodities = {}, calls = {}, money = 10000000 }
-M.sellPrice, M.itemLoad = {}, {}
+-- M.stack[itemID] = taille de pile ; M.equip[itemID] = emplacement d'équipement ; M.ah.ready = ligne libre ; M.now = horloge GetTime
+M.ah = { replicate = {}, items = {}, commodities = {}, calls = {}, money = 10000000, ready = true }
+M.sellPrice, M.itemLoad, M.stack, M.equip = {}, {}, {}, {}
+M.now = 1000
+function GetTime() return M.now end
 Enum.AuctionHouseSortOrder = { Price = 0, Name = 1 }
 Enum.AuctionHouseError = { NotEnoughMoney = 0, HigherBid = 1, ItemNotFound = 4, IsBusy = 7, DatabaseError = 10 }
 function GetMoney() return M.ah.money end
-C_Item.GetItemInfo = function(itemID)
-  if M.itemLoad[itemID] then return nil end
+local function itemIDOf(item) if type(item) == "number" then return item end return tonumber(tostring(item):match("item:(%d+)")) end
+C_Item.GetItemInfo = function(item)
+  local itemID = itemIDOf(item)
+  if not itemID or M.itemLoad[itemID] then return nil end
   local sp = M.sellPrice[itemID]
   if sp == nil then return nil end
-  return "Objet " .. itemID, "|cffffffff|Hitem:" .. itemID .. ":0:0:0:0:0:0:0|h[Objet " .. itemID .. "]|h|r", 1, 10, 1, "Divers", "Divers", 20, "", 134400, sp
+  return "Objet " .. itemID, "|cffffffff|Hitem:" .. itemID .. ":0:0:0:0:0:0:0|h[Objet " .. itemID .. "]|h|r", 1, 10, 1, "Divers", "Divers",
+    M.stack[itemID] or 1, M.equip[itemID] or "", 134400, sp
 end
 C_Item.RequestLoadItemDataByID = function(itemID) table.insert(M.ah.calls, { "load", itemID }) end
+C_Item.GetDetailedItemLevelInfo = function(link) return 10 end
 C_AuctionHouse = {
+  IsThrottledMessageSystemReady = function() return M.ah.ready ~= false end,
   ReplicateItems = function() table.insert(M.ah.calls, { "replicate" }) end,
   GetNumReplicateItems = function() return #M.ah.replicate end,
   GetReplicateItemInfo = function(i)
-    local e = M.ah.replicate[i]
-    return e.name, 134400, e.count, 1, true, 1, "", 0, 0, e.buyout, 0, nil, nil, e.owner, nil, 0, e.itemID, true
+    local e = M.ah.replicate[i + 1]
+    if not e then return nil end
+    return e.name, 134400, e.count, 1, true, 1, "", 0, 0, e.buyout, 0, nil, nil, e.owner, nil, 0, e.itemID, e.hasAll ~= false
   end,
-  GetReplicateItemLink = function(i) return M.ah.replicate[i].link end,
+  GetReplicateItemLink = function(i) return M.ah.replicate[i + 1].link end,
   MakeItemKey = function(itemID, lvl, suffix, pet) return { itemID = itemID, itemLevel = lvl or 0, itemSuffix = suffix or 0, battlePetSpeciesID = pet or 0 } end,
-  SendSearchQuery = function(key, sorts, sep) table.insert(M.ah.calls, { "search", key.itemID, key.itemSuffix }); M.ah.lastKey = key end,
+  SendSearchQuery = function(key, sorts, sep) table.insert(M.ah.calls, { "search", key.itemID, key.itemSuffix, key.itemLevel }); M.ah.lastKey = key end,
   GetNumItemSearchResults = function(key) return #(M.ah.items[key.itemID] or {}) end,
   GetItemSearchResultInfo = function(key, i)
     local r = M.ah.items[key.itemID][i]
