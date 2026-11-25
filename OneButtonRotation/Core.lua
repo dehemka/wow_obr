@@ -37,7 +37,7 @@ local DEFAULTS = {
   summonPet = false,     -- ajouter une ligne d'invocation du familier hors combat
   immolate = false,      -- Affliction 10-29 : ajouter Immolation en 3e DoT (hors guide Method)
   actionSlotSocial = nil, -- emplacement de barre de la macro OBR_SOCIAL
-  ahMinProfit = 0,        -- hôtel des ventes : gain minimal (cuivre) pour retenir une affaire ; ahLastScan = date du dernier scan complet
+  ahMinProfit = 100,      -- hôtel des ventes : gain minimal (cuivre) pour retenir une affaire (champ « Gain minimal » de l'onglet) ; ahLastScan = date du dernier scan complet
   ahMaxCandidates = 100,  -- hôtel des ventes : lignes affichées après le scan complet
   ahPreverify = 10,       -- hôtel des ventes : lignes vérifiées d'avance en arrière-plan (une recherche chacune)
   quickMacros = true,     -- créer les macros rapides OBR_GROUPE / OBR_OUI / OBR_NON / OBR_MERCI / OBR_DECK (/obr say <clé>)

@@ -472,6 +472,18 @@ AH.HandleCommand("profit 250")
 expect(ns.db.ahMinProfit == 250 and M.chat[1]:find("2pa 50pc", 1, true), "/obr ah profit 250")
 AH.HandleCommand("")
 expect(M.chat[2]:find("achat(s) pour", 1, true) ~= nil and M.chat[3]:find("Usage", 1, true) ~= nil, "/obr ah : état + usage")
+-- gain minimal appliqué à la liste : les lignes ouvertes en dessous disparaissent, les réglées restent
+AH.state.rows = {
+  { kind = "item", itemID = 1, name = "A", auctionID = 1, qty = 1, price = 1, sellPrice = 10, profit = 9, status = "ready" },
+  { kind = "candidate", cand = {}, itemID = 2, name = "B", qty = 1, price = 1, sellPrice = 300, profit = 299, status = "unverified" },
+  { kind = "item", itemID = 3, name = "C", auctionID = 3, qty = 1, price = 1, sellPrice = 5, profit = 4, status = "bought" },
+  { kind = "candidate", cand = {}, itemID = 4, name = "D", qty = 1, price = 1, sellPrice = 50, profit = 49, status = "queued" },
+}
+AH.state.verify = { queue = { AH.state.rows[4] }, current = nil }
+expect(AH.SetMinProfit(100) == 100 and #AH.state.rows == 2 and AH.state.rows[1].name == "B" and AH.state.rows[2].name == "C" and #AH.state.verify.queue == 0,
+  "gain minimal 1 pa : A (+9) et D (+49) retirés, B (+299) et C (acheté) gardés, file purgée")
+M.chat = {}; AH.HandleCommand("profit 5")
+expect(ns.db.ahMinProfit == 5 and M.chat[1]:find("5pc", 1, true), "/obr ah profit 5")
 M.chat = {}; AH.HandleCommand("pre 5")
 expect(ns.db.ahPreverify == 5 and M.chat[1]:find("5", 1, true), "/obr ah pre 5")
 AH.CHUNK = 400; ns.db.ahMinProfit = 0; ns.db.ahLastScan = nil; ns.db.ahPreverify = nil

@@ -103,6 +103,10 @@ local function RefreshButtons()
     or (unverified > 0 and "Vérifier la suite") or "Acheter le suivant")
 
   frame.status:SetText(AH.StatusText())
+  if frame.minBox and not frame.minBox:HasFocus() then
+    local v = (AH.MinProfit() or 0) / 100
+    frame.minBox:SetText(v == math.floor(v) and tostring(math.floor(v)) or string.format("%.2f", v):gsub("0+$", ""):gsub("%.$", ""))
+  end
 end
 
 function ns.AuctionUIRefresh()
@@ -218,6 +222,38 @@ local function Build(ahf)
   frame.reportBtn = Button(frame, "Rapport", 90, 24, function() AH.Report() end)
   frame.reportBtn:SetPoint("LEFT", frame.nextBtn, "RIGHT", 8, 0)
 
+  -- Gain minimal par affaire, en pièces d'argent (décimales acceptées : 0,5 = 50 pc)
+  local minLabel = Label(frame, "Gain minimal :", "GameFontNormalSmall")
+  minLabel:SetPoint("LEFT", frame.reportBtn, "RIGHT", 14, 0)
+  local minBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+  minBox:SetSize(48, 20)
+  minBox:SetPoint("LEFT", minLabel, "RIGHT", 8, 0)
+  minBox:SetAutoFocus(false)
+  minBox:SetMaxLetters(7)
+  minBox:SetJustifyH("RIGHT")
+  local minUnit = Label(frame, "pa", "GameFontNormalSmall")
+  minUnit:SetPoint("LEFT", minBox, "RIGHT", 4, 0)
+  local function Commit(self)
+    local v = tonumber((self:GetText() or ""):gsub(",", "."):gsub("%s", "")) or 0
+    local removed = 0
+    local before = #AH.state.rows
+    AH.SetMinProfit(math.floor(v * 100 + 0.5))
+    removed = before - #AH.state.rows
+    AH.Print("Gain minimal : %s%s", AH.MoneyString(AH.MinProfit()), removed > 0 and string.format(" (%d ligne(s) retirée(s))", removed) or "")
+    self:ClearFocus()
+    ns.AuctionUIRefresh()
+  end
+  minBox:SetScript("OnEnterPressed", Commit)
+  minBox:SetScript("OnEditFocusLost", Commit)
+  minBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  minBox:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Gain minimal par affaire, en pièces d'argent (0,5 = 50 pc). Les lignes en dessous sont retirées de la liste et ignorées par les prochains scans. Entrée pour valider.", 1, 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  minBox:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  frame.minBox = minBox
+
   frame.status = Label(frame, "", "GameFontHighlightSmall")
   frame.status:SetPoint("TOPLEFT", frame.scanBtn, "BOTTOMLEFT", 2, -4)
   frame.status:SetPoint("RIGHT", frame, "RIGHT", -8, 0)
@@ -259,7 +295,7 @@ local function Build(ahf)
 
   local hint = Label(frame, "La liste s'affiche dès la fin du scan ; les 10 meilleures lignes se vérifient seules (/obr ah pre <n>), "
     .. "un clic vérifie les autres (≈ gain estimé). Un clic sur une ligne vérifiée achète (un achat par clic, règle du jeu). "
-    .. "« Acheter le suivant » enchaîne ; lie-le à un bouton dans Options > Raccourcis > AddOns. Gain minimal : /obr ah profit <cuivre>.", "GameFontDisableSmall")
+    .. "« Acheter le suivant » enchaîne ; lie-le à un bouton dans Options > Raccourcis > AddOns. Le gain minimal (en haut à droite) écarte les affaires à quelques cuivres.", "GameFontDisableSmall")
   hint:SetPoint("BOTTOMLEFT", 10, 4)
   hint:SetPoint("RIGHT", down, "LEFT", -10, 0)
   hint:SetJustifyH("LEFT")

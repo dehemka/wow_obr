@@ -368,6 +368,42 @@ local function BuildRows(now)
   AH.Finish()
 end
 
+-- Gain minimal (cuivre) : réglage et application immédiate à la liste affichée
+function AH.MinProfit() return MinProfit() end
+function AH.SetMinProfit(copper)
+  copper = math.max(0, math.floor(tonumber(copper) or 0))
+  ns.db.ahMinProfit = copper
+  AH.ApplyMinProfit()
+  return copper
+end
+
+-- Retire les lignes (non réglées) dont le gain est sous le gain minimal ; les vérifications
+-- futures l'appliquent déjà via MinProfit()
+function AH.ApplyMinProfit()
+  local st = AH.state
+  local floor = math.max(1, MinProfit())
+  local kept, removed = {}, 0
+  local current = st.verify and st.verify.current
+  for _, row in ipairs(st.rows) do
+    local open = row.status == "unverified" or row.status == "queued" or row.status == "ready"
+    if open and row ~= current and (row.profit or 0) < floor then
+      removed = removed + 1
+    else
+      table.insert(kept, row)
+    end
+  end
+  st.rows = kept
+  if st.verify then
+    local q = {}
+    for _, row in ipairs(st.verify.queue) do if (row.profit or 0) >= floor then table.insert(q, row) end end
+    st.verify.queue = q
+  end
+  st.stats.filtered = (st.stats.filtered or 0) + removed
+  AH.SortRows()
+  Changed()
+  return removed
+end
+
 -- Nombre de lignes par état
 function AH.Count(status)
   local n = 0
@@ -911,8 +947,8 @@ function AH.HandleCommand(rest)
   elseif sub == "profit" or sub == "gain" then
     local n = tonumber(arg)
     if not n then Print("Usage : /obr ah profit <pièces de cuivre> (gain minimal par affaire, actuel %s)", AH.MoneyString(MinProfit())) return end
-    ns.db.ahMinProfit = math.max(0, math.floor(n))
-    Print("Gain minimal par affaire : %s", AH.MoneyString(ns.db.ahMinProfit))
+    AH.SetMinProfit(n)
+    Print("Gain minimal par affaire : %s (les lignes en dessous sont retirées)", AH.MoneyString(ns.db.ahMinProfit))
   elseif sub == "max" then
     local n = tonumber(arg)
     if not n then Print("Usage : /obr ah max <n> (lignes affichées après le scan ; actuel %d)", MaxCandidates()) return end

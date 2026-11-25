@@ -142,7 +142,9 @@ revente chez un vendeur** et permet de les acheter pour les revendre au PNJ.
   indices de la liste complète à partir de 0, liste reçue par morceaux, requêtes jetées quand la
   ligne est occupée (renvoyées), quantités plafonnées à la taille de pile.
 - **Rapport (chat)** : nombre d'achats, dépense, revente vendeur attendue, gain, échecs et causes.
-- `/obr ah profit <cuivre>` fixe le gain minimal par affaire (0 par défaut) ; `/obr ah pre <n>` le
+- **Gain minimal** (champ en haut de l'onglet, en pièces d'argent, 1 pa par défaut) : les affaires qui
+  rapportent moins sont retirées de la liste tout de suite et ignorées par les prochains scans.
+  `/obr ah profit <cuivre>` fait la même chose en ligne de commande ; `/obr ah pre <n>` le
   nombre de lignes vérifiées d'avance ; `/obr ah max <n>` le nombre de lignes affichées ; `/obr ah` donne l'état,
   `/obr ah scan`, `/obr ah next`, `/obr ah rapport` font la même chose que les boutons.
 
