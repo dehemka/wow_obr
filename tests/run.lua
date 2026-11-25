@@ -347,28 +347,46 @@ expect(AH.state.phase == "loading" and #AH.state.pendingIdx == 1 and #calls("loa
 expect(AH.state.stats.keys == 4, "4 clés : épée (suffixe), empilable, 1003, sac (1005 sans prix vendeur écarté)")
 tick(); expect(AH.state.phase == "loading", "objet toujours pas chargé : on attend")
 M.ah.replicate[5].hasAll = true; M.itemLoad[1004] = nil
+ns.db.ahPreverify = 1 -- pour le test : une seule ligne vérifiée d'avance
+M.ah.ready = false
 tick()
-expect(AH.state.phase == "searching" and AH.state.stats.candidates == 3 and AH.state.stats.scanned == 7, "objet chargé → 3 candidats (épée, 1004, empilable), 7 enchères comptées")
-expect(AH.state.current.itemID == 1004 and #calls("search") == 0, "candidat au meilleur gain d'abord (1004 : (500 - 200) × 2 = 600) ; la requête part au tick suivant")
-expect(AH.StatusText():find("Vérification", 1, true) and AH.StatusText():find("Objet 1004", 1, true), "état : vérification + nom de l'objet en cours")
-AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1004 }) -- pas encore envoyée : ignorée
-expect(AH.state.current.itemID == 1004, "résultat avant envoi : ignoré")
+expect(AH.state.phase == "done" and #AH.state.rows == 3 and AH.state.stats.candidates == 3 and AH.state.stats.scanned == 7, "objet chargé → scan terminé aussitôt : 3 lignes à vérifier, 7 enchères comptées")
+expect(AH.state.rows[1].itemID == 1004 and AH.state.rows[1].status == "unverified" and AH.state.rows[1].profit == 600 and AH.state.rows[1].qty == 2 and AH.state.rows[1].price == 400,
+  "ligne estimée : 1004 ×2 à 400, gain ≈ 600, en tête")
+expect(AH.state.rows[2].itemID == 1001 and AH.state.rows[2].profit == 400 and AH.state.rows[3].itemID == 1002 and AH.state.rows[3].profit == 100, "puis l'épée (≈ 400) et le tissu (≈ 100 sur la pile)")
+expect(AH.StatusText():find("3 à vérifier", 1, true), "état : 3 lignes à vérifier")
+tick()
+expect(AH.state.rows[1].status == "verifying" and AH.state.verify.current == AH.state.rows[1] and #calls("search") == 0, "vérification d'avance : la meilleure ligne, ligne occupée → attente")
+expect(AH.StatusText():find("vérification : Objet 1004", 1, true), "état : nom de l'objet en vérification")
+AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1004 })
+expect(AH.state.rows[1].status == "verifying", "résultat avant envoi : ignoré")
 M.ah.ready = true; tick()
-expect(#calls("search") == 1 and calls("search")[1][2] == 1004, "recherche de 1004 envoyée")
-AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1004 }); M.ah.ready = false; tick()
-expect(AH.state.current.itemID == 1001, "puis l'épée (1000 - 600 = 400)")
-tick(); expect(#calls("search") == 1, "ligne occupée : recherche en attente")
+expect(#calls("search") == 1 and calls("search")[1][2] == 1004, "ligne libre : recherche de 1004 envoyée")
+AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1004 }); tick()
+local r1 = AH.state.rows[1]
+expect(r1.kind == "item" and r1.auctionID == 601 and r1.status == "ready" and r1.profit == 600 and AH.state.stats.verified == 1, "1004 vérifié : ligne remplacée par l'enchère 601, prête")
+tick(); tick()
+expect(AH.state.verify.current == nil and AH.state.rows[2].status == "unverified" and #calls("search") == 1, "1 ligne prête ≥ pre 1 : la vérification d'avance s'arrête")
+-- clic sur l'épée : vérification prioritaire, puis achat au clic suivant
+local sword_row = AH.state.rows[2]
+local okV, msgV = AH.Buy(sword_row)
+expect(okV == false and msgV:find("reclique", 1, true) and sword_row.status == "queued", "clic sur une ligne non vérifiée : vérification lancée")
+expect(AH.Buy(sword_row) == false and sword_row.status == "queued", "second clic trop tôt : toujours en vérification")
+M.ah.ready = false; tick(); expect(sword_row.status == "verifying" and #calls("search") == 1, "ligne occupée : recherche en attente")
 M.ah.ready = true; tick()
 local sc = calls("search")
 expect(#sc == 2 and sc[2][2] == 1001 and sc[2][3] == -5 and sc[2][4] == 10, "recherche de l'épée avec suffixe -5 et niveau d'objet 10")
 AH.OnEvent("AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED"); tick()
-expect(#calls("search") == 3 and AH.state.current.itemID == 1001, "recherche jetée : renvoyée")
+expect(#calls("search") == 3 and sword_row.status == "verifying", "recherche jetée : renvoyée")
 AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1001 }); tick()
-expect(AH.state.current.itemID == 1002 and #calls("search") == 4, "puis l'empilable 1002 (gain 100 sur la pile)")
-tick(16) -- pas de réponse : abandon de la recherche
-expect(AH.state.phase == "done" and AH.state.stats.unresolved == 1 and #AH.state.rows == 3, "recherche sans réponse abandonnée : scan terminé, 3 affaires")
-local r1, r2, r3 = AH.state.rows[1], AH.state.rows[2], AH.state.rows[3]
-expect(r1.itemID == 1004 and r1.profit == 600 and r2.auctionID == 501 and r2.profit == 400 and r3.auctionID == 502 and r3.profit == 50, "tri par gain : 1004 (+600), épée à 600 (+400), épée à 950 (+50) ; 1200 et la mienne écartées")
+expect(#AH.state.rows == 4 and AH.state.rows[2].auctionID == 501 and AH.state.rows[2].profit == 400 and AH.state.rows[4].auctionID == 502 and AH.state.rows[4].profit == 50
+  and AH.state.rows[3].kind == "candidate", "épée vérifiée : enchères 501 (+400) et 502 (+50) ; 1200 et la mienne écartées ; le tissu (≈ 100) reste 3e")
+local r2, r3, tissu = AH.state.rows[2], AH.state.rows[4], AH.state.rows[3]
+-- vérification sans réponse : la ligne redevient cliquable avec une note
+expect(AH.Verify(tissu, true) and tissu.status == "queued", "tissu mis en file")
+tick(); expect(tissu.status == "verifying" and #calls("search") == 4, "tissu : recherche envoyée")
+tick(16)
+expect(tissu.status == "unverified" and tissu.note and tissu.note:find("sans réponse", 1, true) and AH.state.stats.unresolved == 1, "sans réponse : à nouveau cliquable, note affichée")
 expect(AH.CanScan() == false and AH.ScanRemaining() > 800 and AH.ScanRemaining(ns.db.ahLastScan + 900) == 0, "verrou de 15 min actif, levé à 900 s")
 -- Achats un par un
 M.ah.calls = {}
@@ -383,6 +401,14 @@ AH.BuyNext(); AH.OnEvent("AUCTION_HOUSE_SHOW_ERROR", 4)
 expect(r2.status == "failed" and r2.error == "enchère déjà partie" and AH.state.report.failed == 1, "erreur ItemNotFound : ligne en échec")
 AH.BuyNext(); tick(8.5)
 expect(r3.status == "failed" and r3.error:find("pas de confirmation", 1, true) and AH.state.report.failed == 2, "achat sans réponse : échec après 8 s")
+-- BuyNext sans ligne prête mais avec des lignes à vérifier : lance la vérification
+AH.state.rows = { { kind = "candidate", cand = { itemID = 1002, key = { itemID = 1002 }, vendor = 10, name = "Tissu" }, itemID = 1002, name = "Tissu", qty = 20, price = 100, sellPrice = 10, profit = 100, status = "unverified" } }
+AH.state.verify = { queue = {}, current = nil }
+local okN, msgN = AH.BuyNext()
+expect(okN == false and msgN:find("vérification de Tissu lancée", 1, true) and AH.state.rows[1].status == "queued", "BuyNext sans ligne prête : vérifie la meilleure ligne")
+tick(); expect(AH.state.rows[1].status == "verifying", "…puis la recherche part")
+AH.OnEvent("COMMODITY_SEARCH_RESULTS_UPDATED", 1002)
+expect(#AH.state.rows == 1 and AH.state.rows[1].kind == "commodity" and AH.state.rows[1].qty == 25 and AH.state.rows[1].status == "ready", "tissu vérifié : 25 unités sous le prix vendeur, prêt")
 -- un seul achat en vol : le second clic est refusé tant que le premier n'a pas répondu
 AH.state.rows = {
   { kind = "item", itemID = 1001, name = "Épée", auctionID = 11, qty = 1, price = 100, sellPrice = 1000, profit = 900, status = "ready" },
@@ -434,8 +460,8 @@ AH.state.phase = "idle"; AH.state.pending = {}; ns.db.ahLastScan = nil; ns.db.ah
 AH.OnEvent("AUCTION_HOUSE_SHOW"); M.ah.ready = true; AH.CHUNK = 400
 expect(AH.StartScan() and AH.state.phase == "waiting", "second scan (verrou effacé pour le test)")
 AH.OnEvent("REPLICATE_ITEM_LIST_UPDATE"); tick(2.5); tick(); tick()
-expect(AH.state.phase == "searching" and AH.state.stats.candidates == 1 and AH.state.stats.eligible == 3, "max 1 : un seul candidat vérifié sur 3 possibles")
-expect(AH.ReportLines()[1]:find("1 candidats vérifiés sur 3 possibles", 1, true), "rapport : mentionne la limite")
+expect(AH.state.phase == "done" and #AH.state.rows == 1 and AH.state.stats.candidates == 1 and AH.state.stats.eligible == 3, "max 1 : une seule ligne affichée sur 3 possibles")
+expect(AH.ReportLines()[1]:find("1 objet(s) retenu(s) sur 3 possibles", 1, true), "rapport : mentionne la limite")
 AH.OnEvent("AUCTION_HOUSE_CLOSED"); ns.db.ahMaxCandidates = nil
 -- /obr ah
 M.chat = {}
@@ -446,6 +472,8 @@ AH.HandleCommand("profit 250")
 expect(ns.db.ahMinProfit == 250 and M.chat[1]:find("2pa 50pc", 1, true), "/obr ah profit 250")
 AH.HandleCommand("")
 expect(M.chat[2]:find("achat(s) pour", 1, true) ~= nil and M.chat[3]:find("Usage", 1, true) ~= nil, "/obr ah : état + usage")
-AH.CHUNK = 400; ns.db.ahMinProfit = 0; ns.db.ahLastScan = nil
+M.chat = {}; AH.HandleCommand("pre 5")
+expect(ns.db.ahPreverify == 5 and M.chat[1]:find("5", 1, true), "/obr ah pre 5")
+AH.CHUNK = 400; ns.db.ahMinProfit = 0; ns.db.ahLastScan = nil; ns.db.ahPreverify = nil
 ns.DebugInfo()
 if _G.FAILED then os.exit(1) end

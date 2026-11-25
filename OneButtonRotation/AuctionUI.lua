@@ -44,6 +44,8 @@ local function StatusText(row)
   if row.status == "bought" then return "|cff40ff40Acheté|r" end
   if row.status == "pending" or row.status == "quoting" or row.status == "confirming" then return "|cffffd100Achat…|r" end
   if row.status == "quote" then return "|cffff8000Clic : confirmer le devis|r" end
+  if row.status == "unverified" then return "|cffaaaaaaClic : vérifier" .. (row.note and (" (" .. row.note .. ")") or "") .. "|r" end
+  if row.status == "queued" or row.status == "verifying" then return "|cffffd100Vérification…|r" end
   if row.status == "failed" then return "|cffff4040" .. (row.error or "échec") .. "|r" end
   return "|cff80c0ffAcheter|r"
 end
@@ -64,7 +66,7 @@ local function RefreshRows()
       b.qty:SetText(row.qty)
       b.price:SetText(Money(row.price))
       b.vendor:SetText(Money(row.sellPrice * row.qty))
-      b.profit:SetText("|cff40ff40+" .. Money(row.profit) .. "|r")
+      b.profit:SetText((row.kind == "candidate" and "|cffaaaaaa≈ +" or "|cff40ff40+") .. Money(row.profit) .. "|r")
       b.state:SetText(StatusText(row))
       b:Show()
     else
@@ -94,9 +96,11 @@ local function RefreshButtons()
   frame.scanBtn.tooltip = ok and "Scan complet : toutes les enchères, une fois toutes les 15 minutes." or why
   local nextRow = AH.NextRow()
   local busy = next(AH.state.pending) ~= nil
-  frame.nextBtn:SetEnabled(nextRow ~= nil and AH.state.open and (nextRow.status == "quote" or not busy))
+  local unverified = AH.Count("unverified")
+  frame.nextBtn:SetEnabled(AH.state.open and ((nextRow ~= nil and (nextRow.status == "quote" or not busy)) or (nextRow == nil and unverified > 0 and not busy)))
   frame.nextBtn:SetText(nextRow and nextRow.status == "quote" and "Confirmer le devis"
-    or nextRow and ("Acheter le suivant (+" .. AH.MoneyString(nextRow.profit) .. ")") or "Acheter le suivant")
+    or nextRow and ("Acheter le suivant (+" .. AH.MoneyString(nextRow.profit) .. ")")
+    or (unverified > 0 and "Vérifier la suite") or "Acheter le suivant")
 
   frame.status:SetText(AH.StatusText())
 end
@@ -163,7 +167,8 @@ local function BuildRow(parent, i)
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine(string.format("Rachat %s pour %d, revente vendeur %s : gain %s", AH.MoneyString(self.row.price),
       self.row.qty, AH.MoneyString(self.row.sellPrice * self.row.qty), AH.MoneyString(self.row.profit)), 1, 1, 1, true)
-    GameTooltip:AddLine(self.row.kind == "commodity" and "Objet empilable : achat groupé de tout ce qui est sous le prix vendeur, prix revérifié par le serveur avant confirmation."
+    GameTooltip:AddLine(self.row.kind == "candidate" and "Estimation d'après le scan complet. Un clic lance la vérification (identifiants d'enchère, environ une seconde) ; la ligne devient achetable."
+      or self.row.kind == "commodity" and "Objet empilable : achat groupé de tout ce qui est sous le prix vendeur, prix revérifié par le serveur avant confirmation."
       or "Enchère unique : achat immédiat au prix affiché ; refusé si elle est déjà partie.", 0.8, 0.8, 0.8, true)
     GameTooltip:AddLine(self.row.status == "ready" and "|cff80c0ffClic : acheter|r" or StatusText(self.row), 1, 1, 1)
     GameTooltip:Show()
@@ -252,9 +257,9 @@ local function Build(ahf)
   local down = Button(frame, "▼", 24, 20, function() offset = offset + ROWS; RefreshRows() end)
   down:SetPoint("RIGHT", up, "LEFT", -2, 0)
 
-  local hint = Label(frame, "Un clic sur une ligne achète (le jeu n'accepte qu'un achat par clic ou par touche). "
-    .. "« Acheter le suivant » prend la meilleure affaire restante ; lie-le à un bouton dans Options > Raccourcis > AddOns. "
-    .. "Un devis d'empilable non confirmé automatiquement demande un second clic. Gain minimal : /obr ah profit <cuivre>.", "GameFontDisableSmall")
+  local hint = Label(frame, "La liste s'affiche dès la fin du scan ; les 10 meilleures lignes se vérifient seules (/obr ah pre <n>), "
+    .. "un clic vérifie les autres (≈ gain estimé). Un clic sur une ligne vérifiée achète (un achat par clic, règle du jeu). "
+    .. "« Acheter le suivant » enchaîne ; lie-le à un bouton dans Options > Raccourcis > AddOns. Gain minimal : /obr ah profit <cuivre>.", "GameFontDisableSmall")
   hint:SetPoint("BOTTOMLEFT", 10, 4)
   hint:SetPoint("RIGHT", down, "LEFT", -10, 0)
   hint:SetJustifyH("LEFT")

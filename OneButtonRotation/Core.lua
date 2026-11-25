@@ -38,7 +38,8 @@ local DEFAULTS = {
   immolate = false,      -- Affliction 10-29 : ajouter Immolation en 3e DoT (hors guide Method)
   actionSlotSocial = nil, -- emplacement de barre de la macro OBR_SOCIAL
   ahMinProfit = 0,        -- hôtel des ventes : gain minimal (cuivre) pour retenir une affaire ; ahLastScan = date du dernier scan complet
-  ahMaxCandidates = 40,   -- hôtel des ventes : objets vérifiés (une recherche chacun) après le scan complet
+  ahMaxCandidates = 100,  -- hôtel des ventes : lignes affichées après le scan complet
+  ahPreverify = 10,       -- hôtel des ventes : lignes vérifiées d'avance en arrière-plan (une recherche chacune)
   quickMacros = true,     -- créer les macros rapides OBR_GROUPE / OBR_OUI / OBR_NON / OBR_MERCI / OBR_DECK (/obr say <clé>)
   actionSlotGroup = nil, actionSlotYes = nil, actionSlotNo = nil, actionSlotThanks = nil, actionSlotDeck = nil, -- leurs emplacements de barre
   socialMacro = true,    -- créer la macro OBR_SOCIAL (/obr social)

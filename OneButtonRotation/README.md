@@ -115,12 +115,15 @@ revente chez un vendeur** et permet de les acheter pour les revendre au PNJ.
 - **Scanner l'hôtel des ventes** : scan complet (`C_AuctionHouse.ReplicateItems`), autorisé une
   fois toutes les 15 minutes ; le bouton affiche le compte à rebours et refuse avant. Le résultat
   est dépouillé par paquets pour ne pas figer le jeu, les prix vendeur manquants sont chargés, puis
-  une recherche par objet retenu récupère les enchères réelles et leurs identifiants (la liste
-  complète n'en donne pas, et il en faut un pour acheter). C'est la phase « Vérification » : le
-  client n'envoie qu'une recherche à la fois, environ une seconde chacune, d'où sa durée. Seuls les
-  objets dont la meilleure enchère rapporte au moins le gain minimal sont vérifiés, les plus
-  rentables d'abord, 40 au maximum (`/obr ah max <n>`, jusqu'à 100). Les lignes apparaissent au fil
-  des réponses et sont achetables tout de suite. La liste est triée par gain décroissant.
+  la liste s'affiche aussitôt : une ligne par objet retenu, avec le gain **estimé** d'après la
+  liste complète (≈), classée par gain, 100 lignes au maximum (`/obr ah max <n>`).
+- **Vérification** : la liste complète ne donne pas les identifiants d'enchère, et il en faut un
+  pour acheter. Chaque ligne doit donc être vérifiée par une recherche classique (le client n'en
+  envoie qu'une à la fois, environ une seconde chacune). Les 10 meilleures lignes se vérifient
+  seules en arrière-plan (`/obr ah pre <n>`), et dès qu'une ligne vérifiée est achetée, la suivante
+  se vérifie ; un clic sur une autre ligne la vérifie en priorité, le clic suivant l'achète. Une
+  ligne vérifiée devient une ou plusieurs enchères réelles au gain exact, ou disparaît si l'objet
+  est déjà parti.
 - **Un clic sur une ligne = un achat.** Le jeu exige qu'un achat (`PlaceBid`,
   `StartCommoditiesPurchase`) parte d'un clic ou d'une touche, et n'en accepte qu'un par geste :
   aucun addon ne peut acheter en boucle tout seul. Pour les objets empilables, l'addon demande d'abord le prix réel au serveur et confirme
@@ -139,8 +142,8 @@ revente chez un vendeur** et permet de les acheter pour les revendre au PNJ.
   indices de la liste complète à partir de 0, liste reçue par morceaux, requêtes jetées quand la
   ligne est occupée (renvoyées), quantités plafonnées à la taille de pile.
 - **Rapport (chat)** : nombre d'achats, dépense, revente vendeur attendue, gain, échecs et causes.
-- `/obr ah profit <cuivre>` fixe le gain minimal par affaire (0 par défaut), ce qui réduit aussi le
-  nombre d'objets vérifiés ; `/obr ah max <n>` limite les vérifications ; `/obr ah` donne l'état,
+- `/obr ah profit <cuivre>` fixe le gain minimal par affaire (0 par défaut) ; `/obr ah pre <n>` le
+  nombre de lignes vérifiées d'avance ; `/obr ah max <n>` le nombre de lignes affichées ; `/obr ah` donne l'état,
   `/obr ah scan`, `/obr ah next`, `/obr ah rapport` font la même chose que les boutons.
 
 ### Guide RestedXP (addon compagnon DMK_RXP)
@@ -184,7 +187,7 @@ Feu de l'âme gratuit (proc Decimation), Peur, Drain d'âme.
 | `/obr slot vie <n>`   | idem pour OBR_VIE                                            |
 | `/obr slot social <n>` | idem pour OBR_SOCIAL                                        |
 | `/obr slot groupe\|oui\|non\|merci\|deck <n>` | idem pour les macros rapides                 |
-| `/obr ah [scan\|next\|rapport\|profit <n>\|max <n>]` | hôtel des ventes : bonnes affaires (voir ci-dessus) |
+| `/obr ah [scan\|next\|rapport\|profit <n>\|pre <n>\|max <n>]` | hôtel des ventes : bonnes affaires (voir ci-dessus) |
 | `/obr say <clé>`      | envoie une phrase rapide (groupe, oui, non, merci, deck) ; `on`/`off` crée ou non les 5 macros |
 | `/obr social`         | ouvre / ferme l'anneau social ; `on`/`off` crée ou non la macro ; `keep` garde l'anneau ouvert après envoi ; `scale <n>` taille ; `reset` recentre |
 | `/obr auto on\|off`   | mise à jour automatique                                      |

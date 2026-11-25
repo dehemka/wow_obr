@@ -10,8 +10,10 @@
 -- les tests). Phases : idle → sending (attente de la ligne, ReplicateItems est un message
 -- « throttled ») → waiting (réponse du serveur) → arriving (la liste arrive par morceaux :
 -- on attend qu'elle cesse de grossir) → reading (dépouillement par paquets, indices 0-based)
--- → loading (objets pas encore en cache) → searching (une recherche par objet retenu, pour
--- obtenir les identifiants d'enchère) → done.
+-- → loading (objets pas encore en cache) → done : la liste s'affiche aussitôt, une ligne
+-- « à vérifier » par objet retenu. La vérification (une recherche par objet, pour obtenir les
+-- identifiants d'enchère, environ une seconde chacune) se fait ensuite en arrière-plan pour
+-- les meilleures lignes (ahPreverify, 10 par défaut), et à la demande au clic pour les autres.
 -- Les particularités du client (indices 0-based, liste en morceaux, requêtes jetées quand la
 -- ligne est occupée, comptes fantaisistes à plafonner par la taille de pile) viennent de
 -- l'observation en jeu de l'addon VendorFloor, qui fait le même travail sur Forever.
@@ -23,7 +25,8 @@ ns.Auction = AH
 
 AH.SCAN_COOLDOWN  = 15 * 60 -- secondes entre deux scans complets (limite serveur)
 AH.CHUNK          = 400     -- enchères dépouillées par tick
-AH.MAX_CANDIDATES = 40      -- objets re-cherchés après le scan par défaut (/obr ah max <n> ; le client limite à 100 recherches/min)
+AH.MAX_CANDIDATES = 100     -- lignes affichées après le scan par défaut (/obr ah max <n>)
+AH.PREVERIFY      = 10      -- lignes vérifiées d'avance en arrière-plan (/obr ah pre <n>)
 AH.SEND_FORCE     = 10      -- secondes d'attente de la ligne avant d'envoyer quand même
 AH.FULL_WAIT      = 90      -- secondes max d'attente de la réponse du scan complet
 AH.FULL_REUSE     = 15      -- sans réponse après ce délai, on lit une liste déjà là (scan d'un autre addon)
@@ -174,6 +177,7 @@ end
 
 local function MinProfit() return (ns.db and tonumber(ns.db.ahMinProfit)) or 0 end
 local function MaxCandidates() return (ns.db and tonumber(ns.db.ahMaxCandidates)) or AH.MAX_CANDIDATES end
+local function PreVerify() return (ns.db and tonumber(ns.db.ahPreverify)) or AH.PREVERIFY end
 
 local function LineReady()
   local api = API()
@@ -239,8 +243,7 @@ local function BeginFull(phase, now)
   st.index = 0
   st.playerName = (type(UnitName) == "function" and UnitName("player")) or nil
   st.stats = { started = AH.Now(), scanned = 0, keys = 0, candidates = 0, searched = 0, unresolved = 0, unloaded = 0 }
-  st.candidates = nil
-  st.current = nil
+  st.verify = { queue = {}, current = nil }
   ResetReport()
 end
 
@@ -286,10 +289,10 @@ function AH.OnDropped(now)
   now = now or AH.Clock()
   if st.phase == "waiting" and (st.sends or 0) < AH.MAX_RESENDS and now - st.t0 < AH.SEND_FORCE then
     st.phase, st.t0 = "sending", now
-  elseif st.phase == "searching" and st.searchSentAt then
-    st.searchSentAt = nil -- renvoyer la recherche courante
-    st.searchWaitFrom = now
-    st.resends = (st.resends or 0) + 1
+  elseif st.verify and st.verify.current and st.verify.sentAt then
+    st.verify.sentAt = nil -- renvoyer la recherche courante
+    st.verify.waitFrom = now
+    st.verify.resends = (st.verify.resends or 0) + 1
   end
 end
 
@@ -313,12 +316,13 @@ local function Record(index)
   local key, ks = AH.KeyFor(itemID, link)
   local it = st.items[ks]
   if not it then
-    it = { key = key, keyString = ks, itemID = itemID, link = link or itemLink, name = name, vendor = vendor, minUnit = unit, bestGain = gain, n = 0 }
+    it = { key = key, keyString = ks, itemID = itemID, link = link or itemLink, name = name, vendor = vendor, minUnit = unit,
+           bestGain = gain, bestUnits = units, bestPrice = buyout, n = 0 }
     st.items[ks] = it
     st.stats.keys = st.stats.keys + 1
   else
     if unit < it.minUnit then it.minUnit = unit; it.link = link or it.link end
-    if gain > it.bestGain then it.bestGain = gain end
+    if gain > it.bestGain then it.bestGain, it.bestUnits, it.bestPrice = gain, units, buyout end
   end
   it.n = it.n + 1
   return true
@@ -334,11 +338,10 @@ local function RequestLoad(index)
 end
 
 -- Choisit les objets dont le rachat unitaire minimal est sous le prix vendeur, puis lance les recherches
-local function StartSearches(now)
+-- Fin du dépouillement : une ligne « à vérifier » par objet retenu (gain estimé d'après la liste
+-- complète), classées par gain. La vérification se fait ensuite en arrière-plan (Tick).
+local function BuildRows(now)
   local st = AH.state
-  -- Une recherche par objet retenu coûte environ une seconde (le client les envoie une par une) :
-  -- on ne garde que les objets dont la meilleure enchère rapporte au moins le gain minimal,
-  -- classés par gain, et au plus ahMaxCandidates.
   local candidates = {}
   local floor = math.max(1, MinProfit())
   for _, it in pairs(st.items) do
@@ -353,43 +356,106 @@ local function StartSearches(now)
   end)
   st.stats.eligible = #candidates
   while #candidates > MaxCandidates() do table.remove(candidates) end
-  st.candidates = candidates
   st.stats.candidates = #candidates
-  st.items = nil
-  st.pendingIdx = nil
-  st.phase = "searching"
-  st.current = nil
-  st.searchSentAt = nil
-  st.resends = 0
-  Changed()
-  AH.NextSearch(now)
+  for _, it in ipairs(candidates) do
+    table.insert(st.rows, {
+      kind = "candidate", cand = it, itemID = it.itemID, link = it.link, name = it.name,
+      qty = it.bestUnits or 1, price = it.bestPrice or 0, sellPrice = it.vendor, profit = it.bestGain, status = "unverified",
+    })
+  end
+  st.items, st.pendingIdx = nil, nil
+  st.verify = { queue = {}, current = nil }
+  AH.Finish()
 end
 
--- Passe au candidat suivant (la requête part dans Tick quand la ligne est libre)
-function AH.NextSearch(now)
+-- Nombre de lignes par état
+function AH.Count(status)
+  local n = 0
+  for _, row in ipairs(AH.state.rows) do if row.status == status then n = n + 1 end end
+  return n
+end
+
+-- Demande la vérification d'une ligne (clic : en tête de file)
+function AH.Verify(row, front)
   local st = AH.state
-  if st.phase ~= "searching" then return end
-  st.current = table.remove(st.candidates, 1)
-  st.searchSentAt = nil
-  st.searchWaitFrom = now or AH.Clock()
-  st.resends = 0
-  if not st.current then AH.Finish() return end
-  st.stats.searched = st.stats.searched + 1
+  if not row or row.status ~= "unverified" or not st.verify then return false end
+  row.status = "queued"
+  row.note = nil
+  if front then table.insert(st.verify.queue, 1, row) else table.insert(st.verify.queue, row) end
+  Changed()
+  return true
+end
+
+-- Prochaine ligne à vérifier : la file (clics) d'abord, puis les meilleures tant qu'il y a
+-- moins de ahPreverify lignes prêtes
+local function PickVerification()
+  local st = AH.state
+  local row = table.remove(st.verify.queue, 1)
+  if row then return row end
+  if AH.Count("ready") + AH.Count("quote") >= PreVerify() then return nil end
+  for _, r in ipairs(st.rows) do
+    if r.status == "unverified" and not r.note then return r end
+  end
+  return nil
+end
+
+local function StartVerification(row, now)
+  local v = AH.state.verify
+  v.current, v.sentAt, v.waitFrom, v.resends = row, nil, now, 0
+  row.status = "verifying"
+  AH.state.stats.searched = (AH.state.stats.searched or 0) + 1
+  Changed()
+end
+
+-- Fin (ou abandon) de la vérification courante
+local function EndVerification(now, failedNote)
+  local st, v = AH.state, AH.state.verify
+  local row = v.current
+  v.current, v.sentAt = nil, nil
+  if row and failedNote then
+    row.status = "unverified"
+    row.note = failedNote
+    st.stats.unresolved = (st.stats.unresolved or 0) + 1
+  end
+  AH.SortRows()
+  Changed()
 end
 
 local function SendSearch(now)
-  local st = AH.state
+  local v = AH.state.verify
   local order = Enum and Enum.AuctionHouseSortOrder and Enum.AuctionHouseSortOrder.Price or 0
-  local ok = pcall(API().SendSearchQuery, st.current.key, { { sortOrder = order, reverseSort = false } }, true)
-  st.searchSentAt = now
-  if not ok then
-    st.stats.unresolved = st.stats.unresolved + 1
-    AH.NextSearch(now)
+  local ok = pcall(API().SendSearchQuery, v.current.cand.key, { { sortOrder = order, reverseSort = false } }, true)
+  v.sentAt = now
+  if not ok then EndVerification(now, "recherche refusée") end
+end
+
+-- Un pas de la vérification en arrière-plan
+local function VerifyTick(now)
+  local st = AH.state
+  local v = st.verify
+  if not v or not st.open or AH.IsScanning() then return end
+  if not v.current then
+    local row = PickVerification()
+    if not row then return end
+    StartVerification(row, now)
+  end
+  if not v.sentAt then
+    if (v.resends or 0) > AH.MAX_RESENDS then
+      EndVerification(now, "requête jetée par le client")
+    elseif LineReady() or now - (v.waitFrom or now) > AH.SEND_FORCE then
+      SendSearch(now)
+    end
+  elseif now - v.sentAt > AH.SEARCH_TIMEOUT then
+    EndVerification(now, "sans réponse, reclique pour réessayer")
   end
 end
 
+-- Tri : gain décroissant ; les lignes réglées (achetées, échouées) en bas
+local ORDER = { quote = 0, ready = 1, verifying = 1, queued = 1, unverified = 1, pending = 1, quoting = 1, confirming = 1, bought = 2, failed = 3 }
 function AH.SortRows()
   table.sort(AH.state.rows, function(a, b)
+    local oa, ob = ORDER[a.status] or 1, ORDER[b.status] or 1
+    if oa ~= ob then return oa < ob end
     if a.profit ~= b.profit then return a.profit > b.profit end
     return (a.name or "") < (b.name or "")
   end)
@@ -400,7 +466,7 @@ function AH.Finish(reason)
   st.phase = "done"
   st.stats.finished = AH.Now()
   st.stats.reason = reason
-  st.candidates, st.current, st.items, st.pendingIdx = nil, nil, nil, nil
+  st.items, st.pendingIdx = nil, nil
   AH.SortRows()
   if reason then Print("Scan interrompu : %s", reason) end
   Changed()
@@ -462,36 +528,35 @@ function AH.Tick(now)
       Changed()
     else
       st.stats.unloaded = #still
-      StartSearches(now)
+      BuildRows(now)
     end
-  elseif phase == "searching" then
-    if st.current then
-      if not st.searchSentAt then
-        if (st.resends or 0) > AH.MAX_RESENDS then
-          st.stats.unresolved = st.stats.unresolved + 1
-          AH.NextSearch(now)
-        elseif LineReady() or now - (st.searchWaitFrom or now) > AH.SEND_FORCE then
-          SendSearch(now)
-        end
-      elseif now - st.searchSentAt > AH.SEARCH_TIMEOUT then
-        st.stats.unresolved = st.stats.unresolved + 1
-        AH.NextSearch(now)
-      end
-    else
-      AH.NextSearch(now)
-    end
+  elseif phase == "done" then
+    VerifyTick(now)
   end
+end
+
+-- La ligne « à vérifier » de l'objet courant est remplacée par ses enchères réelles
+local function ReplaceCandidate(row, newRows)
+  local st = AH.state
+  for i, r in ipairs(st.rows) do
+    if r == row then table.remove(st.rows, i) break end
+  end
+  for _, r in ipairs(newRows) do table.insert(st.rows, r) end
+  st.stats.verified = (st.stats.verified or 0) + 1
+  if #newRows == 0 then st.stats.vanished = (st.stats.vanished or 0) + 1 end
 end
 
 -- ITEM_SEARCH_RESULTS_UPDATED(itemKey) : une ligne par enchère rentable
 function AH.OnItemResults(itemKey, now)
-  local st = AH.state
-  local cand = st.current
-  if st.phase ~= "searching" or not cand or not st.searchSentAt then return end
+  local st, v = AH.state, AH.state.verify
+  local row = v and v.current
+  local cand = row and row.cand
+  if not cand or not v.sentAt then return end
   local itemID = type(itemKey) == "table" and itemKey.itemID or itemKey
   if itemID ~= cand.itemID then return end
   local api = API()
   local n = api.GetNumItemSearchResults(cand.key) or 0
+  local found = {}
   for i = 1, n do
     local r = api.GetItemSearchResultInfo(cand.key, i)
     if r and r.auctionID and (tonumber(r.buyoutAmount) or 0) > 0 and not r.containsOwnerItem then
@@ -499,21 +564,23 @@ function AH.OnItemResults(itemKey, now)
       local price = tonumber(r.buyoutAmount)
       local profit = cand.vendor * qty - price
       if profit >= math.max(1, MinProfit()) then
-        table.insert(st.rows, {
+        table.insert(found, {
           kind = "item", itemID = cand.itemID, link = r.itemLink or cand.link, name = cand.name or AH.ItemName(cand.itemID),
           auctionID = r.auctionID, qty = qty, price = price, sellPrice = cand.vendor, profit = profit, status = "ready",
         })
       end
     end
   end
-  AH.NextSearch(now)
+  ReplaceCandidate(row, found)
+  EndVerification(now)
 end
 
 -- COMMODITY_SEARCH_RESULTS_UPDATED(itemID) : une seule ligne regroupant tout ce qui est sous le prix vendeur
 function AH.OnCommodityResults(itemID, now)
-  local st = AH.state
-  local cand = st.current
-  if st.phase ~= "searching" or not cand or not st.searchSentAt or itemID ~= cand.itemID then return end
+  local st, v = AH.state, AH.state.verify
+  local row = v and v.current
+  local cand = row and row.cand
+  if not cand or not v.sentAt or itemID ~= cand.itemID then return end
   local api = API()
   local n = api.GetNumCommoditySearchResults(itemID) or 0
   local qty, cost = 0, 0
@@ -529,14 +596,16 @@ function AH.OnCommodityResults(itemID, now)
     end
   end
   local profit = cand.vendor * qty - cost
+  local found = {}
   if qty > 0 and profit >= math.max(1, MinProfit()) then
-    table.insert(st.rows, {
+    table.insert(found, {
       kind = "commodity", itemID = itemID, link = cand.link, name = cand.name or AH.ItemName(itemID),
       qty = qty, price = cost, maxTotal = cand.vendor * qty - math.max(1, MinProfit()),
       sellPrice = cand.vendor, profit = profit, status = "ready",
     })
   end
-  AH.NextSearch(now)
+  ReplaceCandidate(row, found)
+  EndVerification(now)
 end
 
 -------------------------------------------------------------------------------
@@ -588,6 +657,11 @@ function AH.Buy(row)
     Changed()
     return true, string.format("confirmation de %s ×%d pour %s…", row.name or "?", row.qty, AH.MoneyString(row.paid or row.price))
   end
+  if row.status == "unverified" then
+    AH.Verify(row, true)
+    return false, string.format("vérification de %s en cours : reclique dans une seconde pour acheter", row.name or "?")
+  end
+  if row.status == "queued" or row.status == "verifying" then return false, "vérification en cours, reclique dans une seconde" end
   if row.status ~= "ready" then return false, "ligne déjà traitée (" .. tostring(row.status) .. ")" end
   if next(st.pending) then return false, "un achat est déjà en cours, attends la réponse" end
   if row.kind == "commodity" and CommodityInFlight() then return false, "un devis d'objet empilable est déjà en cours" end
@@ -629,6 +703,14 @@ function AH.BuyNext()
   if not row then
     if #AH.state.rows == 0 then return false, "aucune affaire : lance un scan d'abord" end
     if next(AH.state.pending) then return false, "achat en cours, attends la réponse" end
+    local v = AH.state.verify
+    if v and v.current then return false, "vérification de " .. (v.current.name or "?") .. " en cours, réappuie dans une seconde" end
+    for _, r in ipairs(AH.state.rows) do
+      if r.status == "unverified" then
+        AH.Verify(r, true)
+        return false, string.format("vérification de %s lancée, réappuie dans une seconde", r.name or "?")
+      end
+    end
     return false, "plus rien à acheter : " .. AH.ReportLine()
   end
   if row.status == "ready" and next(AH.state.pending) then return false, "un achat est déjà en cours, attends la réponse" end
@@ -692,19 +774,22 @@ end
 -------------------------------------------------------------------------------
 function AH.ReportLine()
   local r = AH.state.report
-  local left = 0
-  for _, row in ipairs(AH.state.rows) do if row.status == "ready" or row.status == "quote" then left = left + 1 end end
-  return string.format("%d achat(s) pour %s, revente vendeur %s (gain %s), %d échec(s), %d en attente",
-    r.bought, AH.MoneyString(r.spent), AH.MoneyString(r.spent + r.gain), AH.MoneyString(r.gain), r.failed, left)
+  local left = AH.Count("ready") + AH.Count("quote")
+  local unv = AH.Count("unverified") + AH.Count("queued") + AH.Count("verifying")
+  return string.format("%d achat(s) pour %s, revente vendeur %s (gain %s), %d échec(s), %d prête(s)%s",
+    r.bought, AH.MoneyString(r.spent), AH.MoneyString(r.spent + r.gain), AH.MoneyString(r.gain), r.failed, left,
+    unv > 0 and (", " .. unv .. " à vérifier") or "")
 end
 
 function AH.ReportLines()
   local st, lines = AH.state, {}
   local s = st.stats or {}
   if s.started then
-    table.insert(lines, string.format("Scan : %d enchères, %d objets distincts, %d candidats vérifiés%s, %d affaire(s) trouvée(s)%s%s.",
+    table.insert(lines, string.format("Scan : %d enchères, %d objets distincts, %d objet(s) retenu(s)%s, %d vérifié(s)%s%s%s.",
       s.scanned or 0, s.keys or 0, s.candidates or 0,
-      (s.eligible or 0) > (s.candidates or 0) and (" sur " .. s.eligible .. " possibles (/obr ah max)") or "", #st.rows,
+      (s.eligible or 0) > (s.candidates or 0) and (" sur " .. s.eligible .. " possibles (/obr ah max)") or "",
+      s.verified or 0,
+      (s.vanished or 0) > 0 and (" dont " .. s.vanished .. " déjà parti(s)") or "",
       (s.unresolved or 0) > 0 and (", " .. s.unresolved .. " recherche(s) sans réponse") or "",
       (s.unloaded or 0) > 0 and (", " .. s.unloaded .. " enchère(s) d'objets non chargés") or ""))
   else
@@ -734,11 +819,11 @@ function AH.StatusText()
   if p == "arriving" then return string.format("Réception de la liste : %d enchères…", st.count or 0) end
   if p == "reading" then return string.format("Dépouillement : %d / %d enchères", st.index or 0, st.count or 0) end
   if p == "loading" then return string.format("Chargement des objets inconnus : %d enchère(s) restante(s)", st.pendingIdx and #st.pendingIdx or 0) end
-  if p == "searching" then
-    return string.format("Vérification des affaires (identifiants d'enchère) : %d / %d%s", s.searched or 0, s.candidates or 0,
-      st.current and st.current.name and (" – " .. st.current.name) or "")
+  if p == "done" then
+    local v = st.verify
+    local extra = v and v.current and (" – vérification : " .. (v.current.name or "?")) or ""
+    return AH.ReportLine() .. extra
   end
-  if p == "done" then return AH.ReportLine() end
   local left = AH.ScanRemaining()
   if not st.open then return "Ouvre l'hôtel des ventes pour scanner." end
   if left > 0 then return "Prochain scan complet possible dans " .. AH.ClockString(left) .. "." end
@@ -830,15 +915,20 @@ function AH.HandleCommand(rest)
     Print("Gain minimal par affaire : %s", AH.MoneyString(ns.db.ahMinProfit))
   elseif sub == "max" then
     local n = tonumber(arg)
-    if not n then Print("Usage : /obr ah max <n> (objets vérifiés après le scan, ~1 s chacun ; actuel %d)", MaxCandidates()) return end
-    ns.db.ahMaxCandidates = math.max(1, math.min(100, math.floor(n)))
-    Print("Objets vérifiés après le scan : %d au maximum", ns.db.ahMaxCandidates)
+    if not n then Print("Usage : /obr ah max <n> (lignes affichées après le scan ; actuel %d)", MaxCandidates()) return end
+    ns.db.ahMaxCandidates = math.max(1, math.min(300, math.floor(n)))
+    Print("Lignes affichées après le scan : %d au maximum", ns.db.ahMaxCandidates)
+  elseif sub == "pre" or sub == "verif" then
+    local n = tonumber(arg)
+    if not n then Print("Usage : /obr ah pre <n> (lignes vérifiées d'avance en arrière-plan, ~1 s chacune ; actuel %d)", PreVerify()) return end
+    ns.db.ahPreverify = math.max(0, math.min(100, math.floor(n)))
+    Print("Lignes vérifiées d'avance : %d", ns.db.ahPreverify)
   elseif sub == "reset" then
     ns.db.ahLastScan = nil
     Print("Verrou de scan effacé (le serveur garde le sien : si le scan ne répond pas, c'est lui).")
   else
     Print("%s", AH.StatusText())
-    Print("Usage : /obr ah scan | next | rapport | profit <cuivre> | max <n> | reset. Onglet « Bonnes affaires » dans l'hôtel des ventes.")
+    Print("Usage : /obr ah scan | next | rapport | profit <cuivre> | pre <n> | max <n> | reset. Onglet « Bonnes affaires » dans l'hôtel des ventes.")
   end
 end
 
