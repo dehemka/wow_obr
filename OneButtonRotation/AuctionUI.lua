@@ -97,9 +97,7 @@ local function RefreshButtons()
   frame.nextBtn:SetEnabled(nextRow ~= nil and AH.state.open and (nextRow.status == "quote" or not busy))
   frame.nextBtn:SetText(nextRow and nextRow.status == "quote" and "Confirmer le devis"
     or nextRow and ("Acheter le suivant (+" .. AH.MoneyString(nextRow.profit) .. ")") or "Acheter le suivant")
-  local anyItem = false
-  for _, row in ipairs(AH.state.rows) do if row.status == "ready" then anyItem = true break end end
-  frame.allBtn:SetEnabled(anyItem and AH.state.open)
+
   frame.status:SetText(AH.StatusText())
 end
 
@@ -212,22 +210,8 @@ local function Build(ahf)
   end)
   frame.nextBtn:SetPoint("LEFT", frame.scanBtn, "RIGHT", 8, 0)
 
-  frame.allBtn = Button(frame, "Tout acheter (essai)", 150, 24, function()
-    local _, msg = AH.BuyAll()
-    if msg then AH.Print("%s", msg) end
-    ns.AuctionUIRefresh()
-  end)
-  frame.allBtn:SetPoint("LEFT", frame.nextBtn, "RIGHT", 8, 0)
-  frame.allBtn:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText("Envoie d'un seul clic l'achat de toutes les enchères uniques de la liste. Le jeu peut n'en accepter qu'une : "
-      .. "celles sans réponse passent en échec et restent achetables avec « Acheter le suivant ». Les empilables se font un par clic.", 1, 1, 1, 1, true)
-    GameTooltip:Show()
-  end)
-  frame.allBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
   frame.reportBtn = Button(frame, "Rapport", 90, 24, function() AH.Report() end)
-  frame.reportBtn:SetPoint("LEFT", frame.allBtn, "RIGHT", 8, 0)
+  frame.reportBtn:SetPoint("LEFT", frame.nextBtn, "RIGHT", 8, 0)
 
   frame.status = Label(frame, "", "GameFontHighlightSmall")
   frame.status:SetPoint("TOPLEFT", frame.scanBtn, "BOTTOMLEFT", 2, -4)
@@ -268,7 +252,7 @@ local function Build(ahf)
   local down = Button(frame, "▼", 24, 20, function() offset = offset + ROWS; RefreshRows() end)
   down:SetPoint("RIGHT", up, "LEFT", -2, 0)
 
-  local hint = Label(frame, "Un clic sur une ligne achète (le jeu exige un clic ou une touche par achat). "
+  local hint = Label(frame, "Un clic sur une ligne achète (le jeu n'accepte qu'un achat par clic ou par touche). "
     .. "« Acheter le suivant » prend la meilleure affaire restante ; lie-le à un bouton dans Options > Raccourcis > AddOns. "
     .. "Un devis d'empilable non confirmé automatiquement demande un second clic. Gain minimal : /obr ah profit <cuivre>.", "GameFontDisableSmall")
   hint:SetPoint("BOTTOMLEFT", 10, 4)

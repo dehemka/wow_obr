@@ -383,21 +383,18 @@ AH.BuyNext(); AH.OnEvent("AUCTION_HOUSE_SHOW_ERROR", 4)
 expect(r2.status == "failed" and r2.error == "enchère déjà partie" and AH.state.report.failed == 1, "erreur ItemNotFound : ligne en échec")
 AH.BuyNext(); tick(8.5)
 expect(r3.status == "failed" and r3.error:find("pas de confirmation", 1, true) and AH.state.report.failed == 2, "achat sans réponse : échec après 8 s")
--- Tout acheter : deux enchères uniques d'un même clic
+-- un seul achat en vol : le second clic est refusé tant que le premier n'a pas répondu
 AH.state.rows = {
   { kind = "item", itemID = 1001, name = "Épée", auctionID = 11, qty = 1, price = 100, sellPrice = 1000, profit = 900, status = "ready" },
   { kind = "item", itemID = 1001, name = "Épée", auctionID = 12, qty = 1, price = 200, sellPrice = 1000, profit = 800, status = "ready" },
   { kind = "commodity", itemID = 1002, name = "Tissu", qty = 25, price = 140, maxTotal = 249, sellPrice = 10, profit = 110, status = "ready" },
 }
 M.ah.calls = {}
-local okA, msgA = AH.BuyAll()
-expect(okA and #calls("bid") == 2 and AH.state.rows[1].status == "pending" and AH.state.rows[2].status == "pending" and AH.state.rows[3].status == "ready", "Tout acheter : 2 PlaceBid d'un coup, l'empilable attend")
-AH.OnEvent("AUCTION_HOUSE_SHOW_ERROR", 10)
-expect(AH.state.rows[1].status == "pending" and AH.state.rows[1].errorSeen, "erreur avec 2 achats en vol : non attribuée, mémorisée")
+expect(AH.BuyNext() and AH.BuyNext() == false and #calls("bid") == 1, "deux clics rapides : un seul PlaceBid")
 AH.OnEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 11)
-expect(AH.state.rows[1].status == "bought", "achat 11 confirmé")
-tick(8.5)
-expect(AH.state.rows[2].status == "failed" and AH.state.rows[2].error:find("erreur interne", 1, true), "achat 12 sans confirmation : échec avec l'erreur vue")
+expect(AH.BuyNext() and #calls("bid") == 2 and calls("bid")[2][2] == 12, "après confirmation : le suivant part")
+AH.OnEvent("AUCTION_HOUSE_SHOW_ERROR", 10)
+expect(AH.state.rows[2].status == "failed" and AH.state.rows[2].error:find("erreur interne", 1, true), "erreur serveur : ligne en échec")
 -- Empilable : devis, confirmation automatique ignorée, puis confirmation au clic
 M.ah.calls = {}
 local okC = AH.BuyNext()

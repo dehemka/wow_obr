@@ -122,17 +122,17 @@ revente chez un vendeur** et permet de les acheter pour les revendre au PNJ.
   rentables d'abord, 40 au maximum (`/obr ah max <n>`, jusqu'à 100). Les lignes apparaissent au fil
   des réponses et sont achetables tout de suite. La liste est triée par gain décroissant.
 - **Un clic sur une ligne = un achat.** Le jeu exige qu'un achat (`PlaceBid`,
-  `StartCommoditiesPurchase`) parte d'un clic ou d'une touche : aucun addon ne peut acheter en boucle
-  tout seul. Pour les objets empilables, l'addon demande d'abord le prix réel au serveur et confirme
+  `StartCommoditiesPurchase`) parte d'un clic ou d'une touche, et n'en accepte qu'un par geste :
+  aucun addon ne peut acheter en boucle tout seul. Pour les objets empilables, l'addon demande d'abord le prix réel au serveur et confirme
   seulement s'il reste rentable.
 - **Acheter le suivant** : achète la meilleure affaire restante. Un raccourci « Hôtel des ventes :
   acheter la prochaine bonne affaire » (Options > Raccourcis > AddOns) permet de le marteler à la
   manette. Chaque résultat (acheté, déjà parti, prix monté, pas assez d'argent…) est noté. Si la
   confirmation automatique d'un devis d'empilable est ignorée par le jeu, la ligne passe en
   « Clic : confirmer le devis » et le clic suivant confirme.
-- **Tout acheter (essai)** : envoie d'un seul clic l'achat de toutes les enchères uniques de la
-  liste. Si le jeu n'en accepte qu'une par clic, les autres échouent sur « pas de confirmation » et
-  restent achetables avec « Acheter le suivant ».
+- Pas de « tout acheter » : vérifié en jeu, le serveur n'accepte qu'un achat par clic (plusieurs
+  `PlaceBid` dans le même clic, seul le premier passe). Le raccourci « Acheter le suivant » martelé
+  est le plus rapide possible.
 - L'onglet est greffé comme le font Auctionator et VendorFloor (LibAHTab) : aucune table de la
   fenêtre Blizzard n'est modifiée, sinon la fermeture de l'hôtel des ventes est bloquée (« action
   non utilisable par l'IU de Blizzard »). Le scan suit aussi ce que VendorFloor a constaté en jeu :
@@ -184,7 +184,7 @@ Feu de l'âme gratuit (proc Decimation), Peur, Drain d'âme.
 | `/obr slot vie <n>`   | idem pour OBR_VIE                                            |
 | `/obr slot social <n>` | idem pour OBR_SOCIAL                                        |
 | `/obr slot groupe\|oui\|non\|merci\|deck <n>` | idem pour les macros rapides                 |
-| `/obr ah [scan\|next\|tout\|rapport\|profit <n>\|max <n>]` | hôtel des ventes : bonnes affaires (voir ci-dessus) |
+| `/obr ah [scan\|next\|rapport\|profit <n>\|max <n>]` | hôtel des ventes : bonnes affaires (voir ci-dessus) |
 | `/obr say <clé>`      | envoie une phrase rapide (groupe, oui, non, merci, deck) ; `on`/`off` crée ou non les 5 macros |
 | `/obr social`         | ouvre / ferme l'anneau social ; `on`/`off` crée ou non la macro ; `keep` garde l'anneau ouvert après envoi ; `scale <n>` taille ; `reset` recentre |
 | `/obr auto on\|off`   | mise à jour automatique                                      |

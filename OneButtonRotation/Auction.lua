@@ -2,8 +2,9 @@
 -- Scan complet (C_AuctionHouse.ReplicateItems, une fois toutes les 15 min), repérage des
 -- enchères dont le rachat est inférieur au prix de revente chez un vendeur, puis achat à la
 -- demande. Les fonctions d'achat du client (PlaceBid, StartCommoditiesPurchase) exigent un
--- clic ou une touche : AH.Buy / AH.BuyNext / AH.BuyAll doivent être appelées depuis un
--- OnClick ou un raccourci, jamais depuis un timer ou un événement.
+-- clic ou une touche, et le serveur n'accepte qu'UN achat par clic (vérifié en jeu : plusieurs
+-- PlaceBid dans le même clic, seul le premier passe). AH.Buy / AH.BuyNext doivent donc être
+-- appelées depuis un OnClick ou un raccourci, une fois par geste, jamais depuis un timer.
 --
 -- Machine à états cadencée par AH.Tick(now) (dix fois par seconde en jeu, à la main dans
 -- les tests). Phases : idle → sending (attente de la ligne, ReplicateItems est un message
@@ -417,7 +418,7 @@ function AH.Tick(now)
       st.pending[row] = nil
       Changed()
     elseif now - at > AH.BUY_TIMEOUT then
-      AH.FailRow(row, row.errorSeen or "pas de confirmation du serveur (enchère déjà partie ?)")
+      AH.FailRow(row, "pas de confirmation du serveur (enchère déjà partie ?)")
     end
   end
   local phase = st.phase
@@ -561,12 +562,6 @@ local function Bought(row)
   Changed()
 end
 
-local function PendingCount()
-  local n = 0
-  for _ in pairs(AH.state.pending) do n = n + 1 end
-  return n
-end
-
 local function CommodityInFlight()
   for row in pairs(AH.state.pending) do
     if row.kind == "commodity" then return true end
@@ -577,8 +572,8 @@ local function CommodityInFlight()
   return false
 end
 
--- Achète une ligne. allowParallel = true (Tout acheter) : ne refuse pas si d'autres achats attendent.
-function AH.Buy(row, allowParallel)
+-- Achète une ligne (un seul achat en vol à la fois)
+function AH.Buy(row)
   local st = AH.state
   if not row then return false, "aucune ligne" end
   if not st.open then return false, "l'hôtel des ventes est fermé" end
@@ -594,7 +589,7 @@ function AH.Buy(row, allowParallel)
     return true, string.format("confirmation de %s ×%d pour %s…", row.name or "?", row.qty, AH.MoneyString(row.paid or row.price))
   end
   if row.status ~= "ready" then return false, "ligne déjà traitée (" .. tostring(row.status) .. ")" end
-  if not allowParallel and next(st.pending) then return false, "un achat est déjà en cours, attends la réponse" end
+  if next(st.pending) then return false, "un achat est déjà en cours, attends la réponse" end
   if row.kind == "commodity" and CommodityInFlight() then return false, "un devis d'objet empilable est déjà en cours" end
   local money = type(GetMoney) == "function" and GetMoney() or math.huge
   if money < row.price then
@@ -640,31 +635,6 @@ function AH.BuyNext()
   return AH.Buy(row)
 end
 
--- Essai : tous les achats d'enchères uniques partent du même clic (le client les met en file ;
--- si le serveur n'en accepte qu'un, les autres échouent sur « pas de confirmation » et
--- « Acheter le suivant » reste disponible). Les empilables restent un par clic (un devis à la fois).
-function AH.BuyAll()
-  local st = AH.state
-  if not st.open then return false, "l'hôtel des ventes est fermé" end
-  local sent, firstMsg = 0, nil
-  for _, row in ipairs(st.rows) do
-    if row.status == "ready" and row.kind == "item" then
-      local ok, msg = AH.Buy(row, true)
-      if ok then sent = sent + 1 elseif not firstMsg then firstMsg = msg end
-    end
-  end
-  if sent == 0 and not CommodityInFlight() then
-    local row = AH.NextRow()
-    if row then
-      local ok, msg = AH.Buy(row, true)
-      if ok then return true, msg end
-      return false, msg
-    end
-  end
-  if sent == 0 then return false, firstMsg or "rien à acheter" end
-  return true, string.format("%d achat(s) envoyé(s) d'un coup ; le rapport dira ce qui est passé", sent)
-end
-
 -- Événements d'achat
 function AH.OnPurchaseCompleted(auctionID)
   for row in pairs(AH.state.pending) do
@@ -673,14 +643,8 @@ function AH.OnPurchaseCompleted(auctionID)
 end
 
 function AH.OnAuctionError(code)
-  local text = AH.ErrorText(code)
-  if PendingCount() == 1 then
-    local row = next(AH.state.pending)
-    AH.FailRow(row, text)
-  else
-    -- plusieurs achats en vol : l'erreur ne dit pas lequel ; le délai tranchera
-    for row in pairs(AH.state.pending) do row.errorSeen = text end
-  end
+  local row = next(AH.state.pending)
+  if row then AH.FailRow(row, AH.ErrorText(code)) end
 end
 
 -- COMMODITY_PRICE_UPDATED(unitPrice, totalPrice) : le serveur donne le prix réel avant confirmation
@@ -857,9 +821,6 @@ function AH.HandleCommand(rest)
   elseif sub == "next" or sub == "suivant" or sub == "buy" then
     local _, msg = AH.BuyNext()
     Print("%s", msg)
-  elseif sub == "all" or sub == "tout" then
-    local _, msg = AH.BuyAll()
-    Print("%s", msg)
   elseif sub == "report" or sub == "rapport" then
     AH.Report()
   elseif sub == "profit" or sub == "gain" then
@@ -877,7 +838,7 @@ function AH.HandleCommand(rest)
     Print("Verrou de scan effacé (le serveur garde le sien : si le scan ne répond pas, c'est lui).")
   else
     Print("%s", AH.StatusText())
-    Print("Usage : /obr ah scan | next | tout | rapport | profit <cuivre> | max <n> | reset. Onglet « Bonnes affaires » dans l'hôtel des ventes.")
+    Print("Usage : /obr ah scan | next | rapport | profit <cuivre> | max <n> | reset. Onglet « Bonnes affaires » dans l'hôtel des ventes.")
   end
 end
 
