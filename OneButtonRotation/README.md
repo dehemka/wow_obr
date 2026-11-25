@@ -106,6 +106,28 @@ en es. Au level up, le chat rappelle le talent à prendre. `/obr talents chat` d
 chat. Les talents sont lus via `C_SpecializationInfo.GetTalentInfo` ; sans cette API l'état est
 approximatif. L'ordre est dans `data/WarlockTalents.lua` (Method ne détaille que le build Affliction).
 
+### Hôtel des ventes : onglet « Bonnes affaires »
+
+Un onglet de plus dans la fenêtre de l'hôtel des ventes (celui de Forever est l'hôtel des ventes
+moderne, API `C_AuctionHouse`). Il cherche les enchères dont le **rachat est inférieur au prix de
+revente chez un vendeur** et permet de les acheter pour les revendre au PNJ.
+
+- **Scanner l'hôtel des ventes** : scan complet (`C_AuctionHouse.ReplicateItems`), autorisé une
+  fois toutes les 15 minutes ; le bouton affiche le compte à rebours et refuse avant. Le résultat
+  est dépouillé par paquets pour ne pas figer le jeu, les prix vendeur manquants sont chargés, puis
+  une recherche par objet retenu (60 au maximum, le client limite à 100 recherches/minute) récupère
+  les enchères réelles et leurs identifiants. La liste est triée par gain décroissant.
+- **Un clic sur une ligne = un achat.** Le jeu exige qu'un achat (`PlaceBid`,
+  `StartCommoditiesPurchase`) parte d'un clic ou d'une touche : aucun addon ne peut acheter en boucle
+  tout seul. Pour les objets empilables, l'addon demande d'abord le prix réel au serveur et confirme
+  seulement s'il reste rentable.
+- **Acheter le suivant** : achète la meilleure affaire restante. Un raccourci « Hôtel des ventes :
+  acheter la prochaine bonne affaire » (Options > Raccourcis > AddOns) permet de le marteler à la
+  manette. Chaque résultat (acheté, déjà parti, prix monté, pas assez d'argent…) est noté.
+- **Rapport (chat)** : nombre d'achats, dépense, revente vendeur attendue, gain, échecs et causes.
+- `/obr ah profit <cuivre>` fixe le gain minimal par affaire (0 par défaut) ; `/obr ah` donne l'état,
+  `/obr ah scan`, `/obr ah next`, `/obr ah rapport` font la même chose que les boutons.
+
 ### Guide RestedXP (addon compagnon DMK_RXP)
 
 Onglet **RestedXP** (ou `/obr rxp`). Ton export RestedXP (le `.txt` téléchargé sur leur site) est
@@ -147,6 +169,7 @@ Feu de l'âme gratuit (proc Decimation), Peur, Drain d'âme.
 | `/obr slot vie <n>`   | idem pour OBR_VIE                                            |
 | `/obr slot social <n>` | idem pour OBR_SOCIAL                                        |
 | `/obr slot groupe\|oui\|non\|merci\|deck <n>` | idem pour les macros rapides                 |
+| `/obr ah [scan\|next\|rapport\|profit <n>]` | hôtel des ventes : bonnes affaires (voir ci-dessus) |
 | `/obr say <clé>`      | envoie une phrase rapide (groupe, oui, non, merci, deck) ; `on`/`off` crée ou non les 5 macros |
 | `/obr social`         | ouvre / ferme l'anneau social ; `on`/`off` crée ou non la macro ; `keep` garde l'anneau ouvert après envoi ; `scale <n>` taille ; `reset` recentre |
 | `/obr auto on\|off`   | mise à jour automatique                                      |

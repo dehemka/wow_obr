@@ -109,6 +109,44 @@ function UnitExists(u) return u == "target" and M.target ~= nil end
 local _UnitName = UnitName
 function UnitName(u) if u == "target" then return M.target end return _UnitName(u) end
 function ChatEdit_GetLastTellTarget() return M.lastTell end
-loadAddon("Core.lua"); loadAddon("data/Warlock.lua"); loadAddon("data/Social.lua"); loadAddon("data/WarlockTalents.lua"); loadAddon("Macro.lua"); loadAddon("Social.lua"); loadAddon("Talents.lua"); loadAddon("Gamepad.lua"); loadAddon("RestedXP.lua")
+-- Hôtel des ventes factice (API C_AuctionHouse de Forever)
+-- M.ah.replicate = { {itemID=, count=, buyout=, owner=, link=}, ... } ; M.ah.items[itemID] = { {auctionID=, buyout=, qty=, owner=}, ... }
+-- M.ah.commodities[itemID] = { {unit=, qty=}, ... } ; M.sellPrice[itemID] = prix vendeur unitaire ; M.itemLoad[itemID] = true si pas encore en cache
+M.ah = { replicate = {}, items = {}, commodities = {}, calls = {}, money = 10000000 }
+M.sellPrice, M.itemLoad = {}, {}
+Enum.AuctionHouseSortOrder = { Price = 0, Name = 1 }
+Enum.AuctionHouseError = { NotEnoughMoney = 0, HigherBid = 1, ItemNotFound = 4, IsBusy = 7, DatabaseError = 10 }
+function GetMoney() return M.ah.money end
+C_Item.GetItemInfo = function(itemID)
+  if M.itemLoad[itemID] then return nil end
+  local sp = M.sellPrice[itemID]
+  if sp == nil then return nil end
+  return "Objet " .. itemID, "|cffffffff|Hitem:" .. itemID .. ":0:0:0:0:0:0:0|h[Objet " .. itemID .. "]|h|r", 1, 10, 1, "Divers", "Divers", 20, "", 134400, sp
+end
+C_Item.RequestLoadItemDataByID = function(itemID) table.insert(M.ah.calls, { "load", itemID }) end
+C_AuctionHouse = {
+  ReplicateItems = function() table.insert(M.ah.calls, { "replicate" }) end,
+  GetNumReplicateItems = function() return #M.ah.replicate end,
+  GetReplicateItemInfo = function(i)
+    local e = M.ah.replicate[i]
+    return e.name, 134400, e.count, 1, true, 1, "", 0, 0, e.buyout, 0, nil, nil, e.owner, nil, 0, e.itemID, true
+  end,
+  GetReplicateItemLink = function(i) return M.ah.replicate[i].link end,
+  MakeItemKey = function(itemID, lvl, suffix, pet) return { itemID = itemID, itemLevel = lvl or 0, itemSuffix = suffix or 0, battlePetSpeciesID = pet or 0 } end,
+  SendSearchQuery = function(key, sorts, sep) table.insert(M.ah.calls, { "search", key.itemID, key.itemSuffix }); M.ah.lastKey = key end,
+  GetNumItemSearchResults = function(key) return #(M.ah.items[key.itemID] or {}) end,
+  GetItemSearchResultInfo = function(key, i)
+    local r = M.ah.items[key.itemID][i]
+    return { auctionID = r.auctionID, buyoutAmount = r.buyout, quantity = r.qty, itemLink = "|Hitem:" .. key.itemID .. ":0:0:0:0:0:0:0|h[Objet " .. key.itemID .. "]|h", containsOwnerItem = r.owner or false }
+  end,
+  GetNumCommoditySearchResults = function(itemID) return #(M.ah.commodities[itemID] or {}) end,
+  GetCommoditySearchResultInfo = function(itemID, i) local r = M.ah.commodities[itemID][i]; return { unitPrice = r.unit, quantity = r.qty, containsOwnerItem = r.owner or false } end,
+  PlaceBid = function(auctionID, amount) table.insert(M.ah.calls, { "bid", auctionID, amount }) end,
+  StartCommoditiesPurchase = function(itemID, qty) table.insert(M.ah.calls, { "startc", itemID, qty }) end,
+  ConfirmCommoditiesPurchase = function(itemID, qty) table.insert(M.ah.calls, { "confirmc", itemID, qty }) end,
+  CancelCommoditiesPurchase = function() table.insert(M.ah.calls, { "cancelc" }) end,
+}
+time = os.time
+loadAddon("Core.lua"); loadAddon("data/Warlock.lua"); loadAddon("data/Social.lua"); loadAddon("data/WarlockTalents.lua"); loadAddon("Macro.lua"); loadAddon("Social.lua"); loadAddon("Talents.lua"); loadAddon("Gamepad.lua"); loadAddon("RestedXP.lua"); loadAddon("Auction.lua")
 M.ns.frame.onEvent(nil, "ADDON_LOADED", "OneButtonRotation")
 return M

@@ -5,4 +5,7 @@
   <Binding name="OBR_TOGGLE_UI" category="ADDONS">
     if OneButtonRotation_ToggleUI then OneButtonRotation_ToggleUI() end
   </Binding>
+  <Binding name="OBR_AUCTION_BUY_NEXT" category="ADDONS">
+    if OneButtonRotation_AuctionBuyNext then OneButtonRotation_AuctionBuyNext() end
+  </Binding>
 </Bindings>

@@ -1,0 +1,28 @@
+## Interface: 16001
+## Title: VendorFloor
+## Notes: Auction house sniper: finds auctions below vendor price, below disenchant value and profitable crafts. One-click buy, collect and sell, as a tab in the auction house window.
+## Author: Bencepo
+## Version: v1.0.8
+## X-Website: https://bencepo.github.io/vendorfloor/
+## X-License: All Rights Reserved
+## X-Curse-Project-ID: 1797826
+## X-Wago-ID: v63QanGb
+## SavedVariables: VendorFloorDB
+## IconTexture: Interface\AddOns\VendorFloor\Icons\minimap
+## AddonCompartmentFunc: VendorFloor_OnCompartmentClick
+
+Libs\LibStub\LibStub.lua
+Libs\LibAHTab\LibAHTab.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+Libs\BencepoUI\BencepoUI.lua
+Locales.lua
+VendorFloor.lua
+Trade.lua
+Basket.lua
+Craft.lua
+Sales.lua
+Export.lua
+Lists.lua
+Tooltip.lua

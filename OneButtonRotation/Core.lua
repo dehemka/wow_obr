@@ -27,6 +27,7 @@ ns.SpecNames = ns.SpecNames or {}      -- ns.SpecNames[CLASS] = { {key=, label=,
 BINDING_HEADER_ONEBUTTONROTATION = "One Button Rotation"
 BINDING_NAME_OBR_SOCIAL_WHEEL = "Ouvrir / fermer l'anneau social"
 BINDING_NAME_OBR_TOGGLE_UI = "Ouvrir / fermer la fenêtre OBR"
+BINDING_NAME_OBR_AUCTION_BUY_NEXT = "Hôtel des ventes : acheter la prochaine bonne affaire"
 function OneButtonRotation_ToggleSocial() if ns.ToggleSocialWheel then ns.ToggleSocialWheel() end end
 function OneButtonRotation_ToggleUI() if ns.ToggleUI then ns.ToggleUI() end end
 
@@ -36,6 +37,7 @@ local DEFAULTS = {
   summonPet = false,     -- ajouter une ligne d'invocation du familier hors combat
   immolate = false,      -- Affliction 10-29 : ajouter Immolation en 3e DoT (hors guide Method)
   actionSlotSocial = nil, -- emplacement de barre de la macro OBR_SOCIAL
+  ahMinProfit = 0,        -- hôtel des ventes : gain minimal (cuivre) pour retenir une affaire ; ahLastScan = date du dernier scan complet
   quickMacros = true,     -- créer les macros rapides OBR_GROUPE / OBR_OUI / OBR_NON / OBR_MERCI / OBR_DECK (/obr say <clé>)
   actionSlotGroup = nil, actionSlotYes = nil, actionSlotNo = nil, actionSlotThanks = nil, actionSlotDeck = nil, -- leurs emplacements de barre
   socialMacro = true,    -- créer la macro OBR_SOCIAL (/obr social)
@@ -351,6 +353,7 @@ local function Help()
   Print("  /obr aide            explication des macros dans une fenêtre à part, en grand (A+ / A-)")
   Print("  /obr rxp             guide RestedXP embarqué : état, import, copie du texte")
   Print("  /obr pad             liste la barre manette de Forever ; /obr pad social <page> <barre> <bouton> y pose la macro")
+  Print("  /obr ah              hôtel des ventes : état ; scan | next | rapport | profit <cuivre> (onglet « Bonnes affaires » dans l'HV)")
 end
 
 function ns.HandleSlash(msg)
@@ -426,6 +429,8 @@ function ns.HandleSlash(msg)
     ns.db.immolate = (rest ~= "off" and rest ~= "0")
     Print("Immolation en 3e DoT (Affliction 10-29) : %s", ns.db.immolate and "activée" or "désactivée")
     ns.Refresh("option Immolation")
+  elseif cmd == "ah" or cmd == "hv" or cmd == "auction" then
+    if ns.Auction then ns.Auction.HandleCommand(rest) else Print("Module hôtel des ventes non chargé.") end
   elseif cmd == "say" or cmd == "dire" then
     local sub = rest:lower()
     if sub == "on" or sub == "off" then

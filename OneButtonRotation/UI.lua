@@ -441,6 +441,7 @@ local function BuildHelpPage()
     "/obr bind              lie l'anneau à un bouton (appuie dessus ensuite)",
     "/obr pad               liste la barre manette ; /obr pad social 1 2 3 pose la macro",
     "/obr slot <n>, /obr slot vie <n>, /obr slot social <n>   pose les macros sur la barre",
+    "/obr ah                hôtel des ventes : onglet « Bonnes affaires » (scan 15 min, achat au clic) ; scan | next | rapport",
     "/obr say groupe|oui|non|merci|deck   phrase rapide (macros OBR_GROUPE, OBR_OUI, OBR_NON, OBR_MERCI) ; on|off",
     "/obr spec affli|demono|destru|auto",
     "/obr rangs             rang connu de chaque sort (penser au maître de classe)",

@@ -1,0 +1,6 @@
+<Bindings>
+	<Binding name="VENDORFLOOR_BUYNEXT" header="VENDORFLOOR" category="ADDONS">
+		VendorFloor_BuyNext()
+	</Binding>
+	<Binding name="CLICK VendorFloorBasketButton:LeftButton" category="ADDONS"/>
+</Bindings>
