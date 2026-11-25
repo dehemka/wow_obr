@@ -349,17 +349,22 @@ tick(); expect(AH.state.phase == "loading", "objet toujours pas chargé : on att
 M.ah.replicate[5].hasAll = true; M.itemLoad[1004] = nil
 tick()
 expect(AH.state.phase == "searching" and AH.state.stats.candidates == 3 and AH.state.stats.scanned == 7, "objet chargé → 3 candidats (épée, 1004, empilable), 7 enchères comptées")
-expect(AH.state.current.itemID == 1001 and #calls("search") == 0, "candidat le plus prometteur d'abord (épée : 1000 - 600) ; la requête part au tick suivant")
-M.ah.ready = false; tick(); expect(#calls("search") == 0, "ligne occupée : recherche en attente")
+expect(AH.state.current.itemID == 1004 and #calls("search") == 0, "candidat au meilleur gain d'abord (1004 : (500 - 200) × 2 = 600) ; la requête part au tick suivant")
+expect(AH.StatusText():find("Vérification", 1, true) and AH.StatusText():find("Objet 1004", 1, true), "état : vérification + nom de l'objet en cours")
+AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1004 }) -- pas encore envoyée : ignorée
+expect(AH.state.current.itemID == 1004, "résultat avant envoi : ignoré")
+M.ah.ready = true; tick()
+expect(#calls("search") == 1 and calls("search")[1][2] == 1004, "recherche de 1004 envoyée")
+AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1004 }); M.ah.ready = false; tick()
+expect(AH.state.current.itemID == 1001, "puis l'épée (1000 - 600 = 400)")
+tick(); expect(#calls("search") == 1, "ligne occupée : recherche en attente")
 M.ah.ready = true; tick()
 local sc = calls("search")
-expect(#sc == 1 and sc[1][2] == 1001 and sc[1][3] == -5 and sc[1][4] == 10, "recherche de l'épée avec suffixe -5 et niveau d'objet 10")
+expect(#sc == 2 and sc[2][2] == 1001 and sc[2][3] == -5 and sc[2][4] == 10, "recherche de l'épée avec suffixe -5 et niveau d'objet 10")
 AH.OnEvent("AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED"); tick()
-expect(#calls("search") == 2 and AH.state.current.itemID == 1001, "recherche jetée : renvoyée")
+expect(#calls("search") == 3 and AH.state.current.itemID == 1001, "recherche jetée : renvoyée")
 AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1001 }); tick()
-expect(AH.state.current.itemID == 1004 and #calls("search") == 3, "puis 1004 (500 - 200 = 300)")
-AH.OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 1004 }); tick()
-expect(AH.state.current.itemID == 1002, "puis l'empilable 1002")
+expect(AH.state.current.itemID == 1002 and #calls("search") == 4, "puis l'empilable 1002 (gain 100 sur la pile)")
 tick(16) -- pas de réponse : abandon de la recherche
 expect(AH.state.phase == "done" and AH.state.stats.unresolved == 1 and #AH.state.rows == 3, "recherche sans réponse abandonnée : scan terminé, 3 affaires")
 local r1, r2, r3 = AH.state.rows[1], AH.state.rows[2], AH.state.rows[3]
@@ -427,7 +432,18 @@ AH.OnEvent("AUCTION_HOUSE_SHOW"); AH.state.phase = "idle"; ns.db.ahLastScan = ni
 AH.OnEvent("REPLICATE_ITEM_LIST_UPDATE")
 expect(AH.state.phase == "arriving" and ns.db.ahLastScan ~= nil and #calls("replicate") == 0, "scan d'un autre addon : on lit sa liste sans redemander")
 AH.OnEvent("AUCTION_HOUSE_CLOSED")
+-- limite de candidats : avec max 1, un seul objet est vérifié et le rapport le dit
+AH.state.phase = "idle"; AH.state.pending = {}; ns.db.ahLastScan = nil; ns.db.ahMaxCandidates = 1; M.itemLoad = {}; M.ah.replicate[5].hasAll = true
+AH.OnEvent("AUCTION_HOUSE_SHOW"); M.ah.ready = true; AH.CHUNK = 400
+expect(AH.StartScan() and AH.state.phase == "waiting", "second scan (verrou effacé pour le test)")
+AH.OnEvent("REPLICATE_ITEM_LIST_UPDATE"); tick(2.5); tick(); tick()
+expect(AH.state.phase == "searching" and AH.state.stats.candidates == 1 and AH.state.stats.eligible == 3, "max 1 : un seul candidat vérifié sur 3 possibles")
+expect(AH.ReportLines()[1]:find("1 candidats vérifiés sur 3 possibles", 1, true), "rapport : mentionne la limite")
+AH.OnEvent("AUCTION_HOUSE_CLOSED"); ns.db.ahMaxCandidates = nil
 -- /obr ah
+M.chat = {}
+AH.HandleCommand("max 20")
+expect(ns.db.ahMaxCandidates == 20 and M.chat[1]:find("20", 1, true), "/obr ah max 20")
 M.chat = {}
 AH.HandleCommand("profit 250")
 expect(ns.db.ahMinProfit == 250 and M.chat[1]:find("2pa 50pc", 1, true), "/obr ah profit 250")

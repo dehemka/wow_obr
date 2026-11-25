@@ -22,7 +22,7 @@ ns.Auction = AH
 
 AH.SCAN_COOLDOWN  = 15 * 60 -- secondes entre deux scans complets (limite serveur)
 AH.CHUNK          = 400     -- enchères dépouillées par tick
-AH.MAX_CANDIDATES = 60      -- objets re-cherchés après le scan (le client limite à 100 recherches/min)
+AH.MAX_CANDIDATES = 40      -- objets re-cherchés après le scan par défaut (/obr ah max <n> ; le client limite à 100 recherches/min)
 AH.SEND_FORCE     = 10      -- secondes d'attente de la ligne avant d'envoyer quand même
 AH.FULL_WAIT      = 90      -- secondes max d'attente de la réponse du scan complet
 AH.FULL_REUSE     = 15      -- sans réponse après ce délai, on lit une liste déjà là (scan d'un autre addon)
@@ -172,6 +172,7 @@ function AH.ErrorText(code)
 end
 
 local function MinProfit() return (ns.db and tonumber(ns.db.ahMinProfit)) or 0 end
+local function MaxCandidates() return (ns.db and tonumber(ns.db.ahMaxCandidates)) or AH.MAX_CANDIDATES end
 
 local function LineReady()
   local api = API()
@@ -307,15 +308,16 @@ local function Record(index)
   local units = AH.Units(link or itemID, count)
   local unit = buyout / units
   if unit < 1 then return true end
+  local gain = (vendor - unit) * units -- gain de cette enchère si on la revend au vendeur
   local key, ks = AH.KeyFor(itemID, link)
   local it = st.items[ks]
   if not it then
-    it = { key = key, keyString = ks, itemID = itemID, link = link or itemLink, name = name, vendor = vendor, minUnit = unit, n = 0 }
+    it = { key = key, keyString = ks, itemID = itemID, link = link or itemLink, name = name, vendor = vendor, minUnit = unit, bestGain = gain, n = 0 }
     st.items[ks] = it
     st.stats.keys = st.stats.keys + 1
-  elseif unit < it.minUnit then
-    it.minUnit = unit
-    it.link = link or it.link
+  else
+    if unit < it.minUnit then it.minUnit = unit; it.link = link or it.link end
+    if gain > it.bestGain then it.bestGain = gain end
   end
   it.n = it.n + 1
   return true
@@ -333,10 +335,14 @@ end
 -- Choisit les objets dont le rachat unitaire minimal est sous le prix vendeur, puis lance les recherches
 local function StartSearches(now)
   local st = AH.state
+  -- Une recherche par objet retenu coûte environ une seconde (le client les envoie une par une) :
+  -- on ne garde que les objets dont la meilleure enchère rapporte au moins le gain minimal,
+  -- classés par gain, et au plus ahMaxCandidates.
   local candidates = {}
+  local floor = math.max(1, MinProfit())
   for _, it in pairs(st.items) do
-    if it.vendor > 0 and it.vendor - it.minUnit >= 1 then
-      it.potential = it.vendor - it.minUnit
+    if it.vendor > 0 and it.vendor - it.minUnit >= 1 and (it.bestGain or 0) >= floor then
+      it.potential = it.bestGain
       table.insert(candidates, it)
     end
   end
@@ -344,7 +350,8 @@ local function StartSearches(now)
     if x.potential ~= y.potential then return x.potential > y.potential end
     return x.keyString < y.keyString
   end)
-  while #candidates > AH.MAX_CANDIDATES do table.remove(candidates) end
+  st.stats.eligible = #candidates
+  while #candidates > MaxCandidates() do table.remove(candidates) end
   st.candidates = candidates
   st.stats.candidates = #candidates
   st.items = nil
@@ -731,8 +738,9 @@ function AH.ReportLines()
   local st, lines = AH.state, {}
   local s = st.stats or {}
   if s.started then
-    table.insert(lines, string.format("Scan : %d enchères, %d objets distincts, %d candidats, %d affaire(s) trouvée(s)%s%s.",
-      s.scanned or 0, s.keys or 0, s.candidates or 0, #st.rows,
+    table.insert(lines, string.format("Scan : %d enchères, %d objets distincts, %d candidats vérifiés%s, %d affaire(s) trouvée(s)%s%s.",
+      s.scanned or 0, s.keys or 0, s.candidates or 0,
+      (s.eligible or 0) > (s.candidates or 0) and (" sur " .. s.eligible .. " possibles (/obr ah max)") or "", #st.rows,
       (s.unresolved or 0) > 0 and (", " .. s.unresolved .. " recherche(s) sans réponse") or "",
       (s.unloaded or 0) > 0 and (", " .. s.unloaded .. " enchère(s) d'objets non chargés") or ""))
   else
@@ -762,7 +770,10 @@ function AH.StatusText()
   if p == "arriving" then return string.format("Réception de la liste : %d enchères…", st.count or 0) end
   if p == "reading" then return string.format("Dépouillement : %d / %d enchères", st.index or 0, st.count or 0) end
   if p == "loading" then return string.format("Chargement des objets inconnus : %d enchère(s) restante(s)", st.pendingIdx and #st.pendingIdx or 0) end
-  if p == "searching" then return string.format("Vérification des affaires : %d / %d", s.searched or 0, s.candidates or 0) end
+  if p == "searching" then
+    return string.format("Vérification des affaires (identifiants d'enchère) : %d / %d%s", s.searched or 0, s.candidates or 0,
+      st.current and st.current.name and (" – " .. st.current.name) or "")
+  end
   if p == "done" then return AH.ReportLine() end
   local left = AH.ScanRemaining()
   if not st.open then return "Ouvre l'hôtel des ventes pour scanner." end
@@ -856,12 +867,17 @@ function AH.HandleCommand(rest)
     if not n then Print("Usage : /obr ah profit <pièces de cuivre> (gain minimal par affaire, actuel %s)", AH.MoneyString(MinProfit())) return end
     ns.db.ahMinProfit = math.max(0, math.floor(n))
     Print("Gain minimal par affaire : %s", AH.MoneyString(ns.db.ahMinProfit))
+  elseif sub == "max" then
+    local n = tonumber(arg)
+    if not n then Print("Usage : /obr ah max <n> (objets vérifiés après le scan, ~1 s chacun ; actuel %d)", MaxCandidates()) return end
+    ns.db.ahMaxCandidates = math.max(1, math.min(100, math.floor(n)))
+    Print("Objets vérifiés après le scan : %d au maximum", ns.db.ahMaxCandidates)
   elseif sub == "reset" then
     ns.db.ahLastScan = nil
     Print("Verrou de scan effacé (le serveur garde le sien : si le scan ne répond pas, c'est lui).")
   else
     Print("%s", AH.StatusText())
-    Print("Usage : /obr ah scan | next | tout | rapport | profit <cuivre> | reset. Onglet « Bonnes affaires » dans l'hôtel des ventes.")
+    Print("Usage : /obr ah scan | next | tout | rapport | profit <cuivre> | max <n> | reset. Onglet « Bonnes affaires » dans l'hôtel des ventes.")
   end
 end
 
